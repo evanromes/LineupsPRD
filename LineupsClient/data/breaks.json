@@ -1,0 +1,1235 @@
+[
+  {
+    "name": "County Line",
+    "lat": 34.051,
+    "lng": -118.964,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Leo Carillo",
+    "lat": 34.043762,
+    "lng": -118.932943,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Zeros",
+    "lat": 34.041956,
+    "lng": -118.91593,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Zuma Beach",
+    "lat": 34.0151575961847,
+    "lng": -118.823636154759,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Point Dume",
+    "lat": 34.0016731994772,
+    "lng": -118.804558744648,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Malibu",
+    "lat": 34.033415,
+    "lng": -118.677652,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Topanga",
+    "lat": 34.038649057421,
+    "lng": -118.5759544372,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Sunset Blvd",
+    "lat": 34.0378981296024,
+    "lng": -118.553563183915,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Venice Breakwater",
+    "lat": 33.9831612707837,
+    "lng": -118.474263465162,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Dockweiler",
+    "lat": 33.94070283102945,
+    "lng": -118.44321,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Hammerland",
+    "lat": 33.9108528052242,
+    "lng": -118.4279133138721,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "El Porto",
+    "lat": 33.8985925532951,
+    "lng": -118.420866962057,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Manhattan Beach",
+    "lat": 33.8796350643179,
+    "lng": -118.411017510697,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Hermosa Beach",
+    "lat": 33.8720136817393,
+    "lng": -118.407515128626,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Redondo Breakwall",
+    "lat": 33.8504451986121,
+    "lng": -118.400483774997,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Torrance Beach",
+    "lat": 33.81120874378085,
+    "lng": -118.39274,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Palos Verdes Cove",
+    "lat": 33.7929465628614,
+    "lng": -118.407031669983,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Lunada Bay",
+    "lat": 33.7720998680626,
+    "lng": -118.426842847667,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pleasure Point",
+    "lat": 36.9540876220453,
+    "lng": -121.971690062891,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Ocean Beach",
+    "lat": 37.7682565117962,
+    "lng": -122.513476588314,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Carcavelos",
+    "lat": 38.681209,
+    "lng": -9.338022,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Costa da Caparica",
+    "lat": 38.630405,
+    "lng": -9.2266,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pascuales",
+    "lat": 18.853,
+    "lng": -103.962,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Troncones",
+    "lat": 17.794,
+    "lng": -101.749,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "The Ranch",
+    "lat": 17.914,
+    "lng": -101.871,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "La Saladita",
+    "lat": 17.836,
+    "lng": -101.774,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Rio Nexpa",
+    "lat": 18.082,
+    "lng": -102.792,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Seal Beach Pier",
+    "lat": 33.7377190285934,
+    "lng": -118.107874753501,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "13th St Seal Beach",
+    "lat": 33.736816,
+    "lng": -118.103408,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Surfside Jetty",
+    "lat": 33.7284858046428,
+    "lng": -118.09080856603,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Anderson St",
+    "lat": 33.7231577185346,
+    "lng": -118.080226173689,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Bolsa Chica",
+    "lat": 33.6853921593044,
+    "lng": -118.040365824134,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Goldenwest",
+    "lat": 33.6661562058152,
+    "lng": -118.01901000164,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "17th St Huntington",
+    "lat": 33.6639452812659,
+    "lng": -118.014049033956,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Huntington Pier",
+    "lat": 33.6552139815928,
+    "lng": -118.005043340881,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Huntington State Beach",
+    "lat": 33.6485165540874,
+    "lng": -117.993221421263,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Santa Ana River Jetties",
+    "lat": 33.628085,
+    "lng": -117.959168,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "56th St Newport Beach",
+    "lat": 33.6229055807335,
+    "lng": -117.948767376086,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "40th Street",
+    "lat": 33.6172275924874,
+    "lng": -117.938811422113,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "36th Street",
+    "lat": 33.6153190345846,
+    "lng": -117.936957653326,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Blackies",
+    "lat": 33.6109583118254,
+    "lng": -117.933626701894,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Newport Pier",
+    "lat": 33.6066469200425,
+    "lng": -117.930738451154,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "The Wedge",
+    "lat": 33.5933899386699,
+    "lng": -117.882342970408,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Corona Del Mar",
+    "lat": 33.592468,
+    "lng": -117.875881,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Salt Creek",
+    "lat": 33.4746650451478,
+    "lng": -117.723302388099,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Strands",
+    "lat": 33.466191,
+    "lng": -117.716886,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Doheny",
+    "lat": 33.4603308582054,
+    "lng": -117.688648571076,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "San Clemente Pier",
+    "lat": 33.4197319428865,
+    "lng": -117.621267674113,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "T Street",
+    "lat": 33.4159655824035,
+    "lng": -117.618142936175,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "San Clemente State Beach",
+    "lat": 33.4029799681431,
+    "lng": -117.606199616021,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Cottons",
+    "lat": 33.3906129925768,
+    "lng": -117.598772149192,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Upper Trestles",
+    "lat": 33.3844763013776,
+    "lng": -117.594451124026,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Lower Trestles",
+    "lat": 33.3821169550733,
+    "lng": -117.588839746081,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Church",
+    "lat": 33.3801145547518,
+    "lng": -117.57903433989,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "San Onofre",
+    "lat": 33.3736054662039,
+    "lng": -117.569129199378,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Trails",
+    "lat": 33.343654,
+    "lng": -117.519084,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Oceanside Harbor",
+    "lat": 33.20422852759,
+    "lng": -117.395977021389,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Oceanside Pier",
+    "lat": 33.1933870461609,
+    "lng": -117.387187858031,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Tamarack",
+    "lat": 33.147320395177,
+    "lng": -117.346796664119,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Terra Mar",
+    "lat": 33.1287625038052,
+    "lng": -117.336194882219,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Ponto",
+    "lat": 33.0870346652814,
+    "lng": -117.314238172042,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Grandview",
+    "lat": 33.0754844673957,
+    "lng": -117.310721142163,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Beacons",
+    "lat": 33.0635702120347,
+    "lng": -117.305550079009,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "D Street",
+    "lat": 33.0454422741039,
+    "lng": -117.298203869191,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Swamis",
+    "lat": 33.0344229310135,
+    "lng": -117.295750253542,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pipes",
+    "lat": 33.02460487110932,
+    "lng": -117.28879,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Cardiff Reef",
+    "lat": 33.015419916751,
+    "lng": -117.283273919829,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Seaside Reef",
+    "lat": 33.001619,
+    "lng": -117.280247,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Del Mar Rivermouth",
+    "lat": 32.975133,
+    "lng": -117.271344,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "15th Street Del Mar",
+    "lat": 32.9586623258672,
+    "lng": -117.269175357458,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Torrey Pines State Beach",
+    "lat": 32.9331020835322,
+    "lng": -117.261740740452,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Blacks",
+    "lat": 32.8887277619852,
+    "lng": -117.257477932799,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Scripps Pier",
+    "lat": 32.8665985093327,
+    "lng": -117.256273652086,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Horseshoe",
+    "lat": 32.838504,
+    "lng": -117.283514,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Windansea",
+    "lat": 32.8296653213721,
+    "lng": -117.282043539579,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Bird Rock",
+    "lat": 32.8134240499085,
+    "lng": -117.273844294504,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Tourmaline",
+    "lat": 32.8069459175153,
+    "lng": -117.265998972397,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pacific Beach",
+    "lat": 32.7970295054355,
+    "lng": -117.259602950346,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Mission Beach",
+    "lat": 32.777929007486,
+    "lng": -117.254326482191,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Ocean Beach Pier",
+    "lat": 32.7491518519641,
+    "lng": -117.255341884911,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Sunset Cliffs",
+    "lat": 32.7189989047182,
+    "lng": -117.257163271327,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Imperial Beach",
+    "lat": 32.577928810608,
+    "lng": -117.134600796776,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Refugio",
+    "lat": 34.4607278590271,
+    "lng": -120.073313658504,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Sands",
+    "lat": 34.4090791409269,
+    "lng": -119.882143269301,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Coal Oil Point/Devereux",
+    "lat": 34.4060390017938,
+    "lng": -119.877763672798,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Campus Point",
+    "lat": 34.4048788892378,
+    "lng": -119.842596370484,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Leadbetter",
+    "lat": 34.3979688807858,
+    "lng": -119.702089869972,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Sandspit",
+    "lat": -119.687402,
+    "lng": 34.404613,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Hammonds",
+    "lat": -119.636549,
+    "lng": 34.416038,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Carpinteria/Tarpits",
+    "lat": -119.525699,
+    "lng": 34.391859,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Rincon",
+    "lat": 34.3725654297481,
+    "lng": -119.477992904603,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Mussel Shoals/Little Rincon",
+    "lat": -119.442182,
+    "lng": 34.355095,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pitas Point",
+    "lat": -119.38924,
+    "lng": 34.31675,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Mondos",
+    "lat": 34.3191767099386,
+    "lng": -119.377375358257,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Solimar",
+    "lat": -119.358505,
+    "lng": 34.309334,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Emma Wood",
+    "lat": 34.2923374874949,
+    "lng": -119.339878421031,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "C Street",
+    "lat": 34.2730698693049,
+    "lng": -119.300150838877,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Ventura Harbor",
+    "lat": 34.244158,
+    "lng": -119.269073,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Oxnard",
+    "lat": -119.237817,
+    "lng": 34.171836,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Velzyland",
+    "lat": 21.685,
+    "lng": -158.033,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Sunset",
+    "lat": 21.679,
+    "lng": -158.042,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Rocky Point",
+    "lat": 21.670550036401,
+    "lng": -158.0482006072,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pipeline",
+    "lat": 21.6651,
+    "lng": -158.0541,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Off-The-Wall",
+    "lat": 21.664,
+    "lng": -158.055,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Rockpile",
+    "lat": 21.662,
+    "lng": -158.057,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Log Cabins",
+    "lat": 21.661,
+    "lng": -158.058,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Waimea Bay",
+    "lat": 21.643,
+    "lng": -158.067,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Laniakea",
+    "lat": 21.62,
+    "lng": -158.088,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Haleiwa",
+    "lat": 21.597,
+    "lng": -158.109,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Barbers Point",
+    "lat": 21.295,
+    "lng": -158.107,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Ala Moana Bowls",
+    "lat": 21.28,
+    "lng": -157.845,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Waikiki",
+    "lat": 21.268,
+    "lng": -157.8255,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Diamond Head",
+    "lat": 21.252,
+    "lng": -157.805,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Kahului Harbor",
+    "lat": 20.904,
+    "lng": -156.463,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Kanaha",
+    "lat": 20.905,
+    "lng": -156.442,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Tavares Bay",
+    "lat": 20.922,
+    "lng": -156.374,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Pavilions",
+    "lat": 20.9374,
+    "lng": -156.356,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Peahi/Jaws",
+    "lat": 20.945,
+    "lng": -156.298,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Honomanu Bay",
+    "lat": 20.866,
+    "lng": -156.166,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Hana Bay",
+    "lat": 20.76,
+    "lng": -155.983,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Honokohau Bay",
+    "lat": 21.0228,
+    "lng": -156.61,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Windmills",
+    "lat": 21.0239,
+    "lng": -156.628,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Honolua Bay",
+    "lat": 21.0159,
+    "lng": -156.641,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Little Makaha",
+    "lat": 20.9972,
+    "lng": -156.668,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Rainbows",
+    "lat": 20.9468,
+    "lng": -156.694,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Lahaina Harbor/Breakwall",
+    "lat": 20.8705,
+    "lng": -156.6797,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Olowalu",
+    "lat": 20.808,
+    "lng": -156.624,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "The Cove",
+    "lat": 20.728,
+    "lng": -156.453,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Oneuli Beach",
+    "lat": 20.6412,
+    "lng": -156.4462,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Makena Beach",
+    "lat": 20.632,
+    "lng": -156.4473,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Aluhi Bay/Dumps",
+    "lat": 20.6124,
+    "lng": -156.438,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "La Perouse Bay",
+    "lat": 20.591,
+    "lng": -156.415,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Wilkes Pass",
+    "lat": -17.8421,
+    "lng": 177.17,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Namotu Left",
+    "lat": -17.8453,
+    "lng": 177.1781,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Swimming Pools",
+    "lat": -17.8459,
+    "lng": 177.178,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Restaurants",
+    "lat": -17.8529,
+    "lng": 177.2002,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  },
+  {
+    "name": "Cloudbreak",
+    "lat": -17.8869,
+    "lng": 177.1855,
+    "type": null,
+    "direction": null,
+    "is_custom": false,
+    "created_by": null
+  }
+]

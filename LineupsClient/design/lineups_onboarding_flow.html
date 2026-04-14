@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lineups — Onboarding Flow</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #060F14; display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 20px 16px; }
+  .ob-phone { background: #060F14; border-radius: 52px; padding: 12px; width: 340px; margin: 0 auto; box-shadow: 0 0 0 1px #1B3A45; }
+  .ob-screen { border-radius: 42px; overflow: hidden; position: relative; height: 720px; display: flex; flex-direction: column; }
+  .ob-notch { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 100px; height: 12px; border-radius: 0 0 10px 10px; z-index: 20; }
+  .step { display: none; flex-direction: column; height: 100%; }
+  .step.active { display: flex; }
+  .ob-input-dark { background: #0F2D3A; border: 0.5px solid #1B5A6A; border-radius: 12px; padding: 12px 16px; font-family: Georgia, serif; font-size: 13px; color: #E8D5B8; width: 100%; outline: none; margin-bottom: 10px; }
+  .ob-input-dark::placeholder { color: #2A5A65; }
+  .ob-input-light { background: #EDE0CC; border: 0.5px solid #C5A882; border-radius: 12px; padding: 12px 16px; font-family: Georgia, serif; font-size: 13px; color: #2A1A08; width: 100%; outline: none; margin-bottom: 10px; }
+  .ob-input-light::placeholder { color: #B8986A; }
+  .ob-btn-primary-dark { background: #1B7A87; border-radius: 14px; padding: 14px; text-align: center; cursor: pointer; font-family: 'Helvetica Neue', sans-serif; font-size: 13px; color: #E8D5B8; font-weight: 500; letter-spacing: 0.3px; }
+  .ob-btn-primary-light { background: #1B7A87; border-radius: 14px; padding: 14px; text-align: center; cursor: pointer; font-family: 'Helvetica Neue', sans-serif; font-size: 13px; color: #E8D5B8; font-weight: 500; letter-spacing: 0.3px; }
+  .ob-btn-ghost-dark { border: 0.5px solid #1B5A6A; border-radius: 14px; padding: 14px; text-align: center; cursor: pointer; font-family: 'Helvetica Neue', sans-serif; font-size: 13px; color: #3CC4C4; letter-spacing: 0.3px; }
+  .ob-progress { display: flex; gap: 5px; justify-content: center; margin-bottom: 20px; }
+  .ob-prog-dot { width: 6px; height: 6px; border-radius: 50%; background: #1B5A6A; }
+  .ob-prog-dot.done { background: #3CC4C4; }
+  .ob-prog-dot.active { background: #E8D5B8; width: 18px; border-radius: 3px; }
+  .ob-choice-dark { background: #0F2D3A; border: 0.5px solid #1B5A6A; border-radius: 12px; padding: 12px 16px; cursor: pointer; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .ob-choice-dark.sel { background: #0F4E63; border-color: #3CC4C4; }
+  .ob-break-row { background: #FEFAF5; border: 0.5px solid #D8C8B0; border-radius: 12px; padding: 11px 14px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
+  .ob-break-row.added { background: #E8F4F0; border-color: #1B7A87; }
+  .ob-friend-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 0.5px solid #F0E4D0; }
+  .ob-avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: Georgia, serif; font-size: 13px; font-weight: 700; flex-shrink: 0; }
+  .ob-follow-btn { border-radius: 8px; padding: 5px 14px; font-family: 'Helvetica Neue', sans-serif; font-size: 10px; cursor: pointer; border: 0.5px solid #1B7A87; color: #1B7A87; background: transparent; }
+  .ob-follow-btn.following { background: #1B7A87; color: #E8D5B8; border-color: #1B7A87; }
+  .lf-form-label { font-family: 'Helvetica Neue', sans-serif; font-size: 9px; color: #A8845A; letter-spacing: 1.5px; margin-bottom: 6px; }
+  .dot-rating { display: flex; gap: 8px; }
+  .rating-dot { width: 26px; height: 26px; border-radius: 50%; cursor: pointer; border: 1.5px solid #C5A882; background: transparent; transition: background 0.15s; }
+  .rating-dot.filled { background: #1B7A87; border-color: #1B7A87; }
+  .session-chip { border-radius: 8px; padding: 8px 14px; font-family: 'Helvetica Neue', sans-serif; font-size: 11px; cursor: pointer; border: 0.5px solid #C5A882; background: #EDE0CC; color: #7A4E2A; }
+  .session-chip.sel { background: #0F5A65; border-color: #1B7A87; color: #3CC4C4; }
+  .nav-btn { font-family: 'Helvetica Neue', sans-serif; font-size: 10px; letter-spacing: 0.8px; padding: 5px 10px; border-radius: 8px; cursor: pointer; border: 0.5px solid #1B5A6A; background: #0F2D3A; color: #4A7A87; }
+  .nav-btn.act { background: #1B7A87; color: #E8D5B8; border-color: #1B7A87; }
+  /* Modal overlay */
+  .modal-overlay { position: absolute; inset: 0; background: rgba(6,15,20,0.7); z-index: 30; display: none; align-items: flex-end; justify-content: center; padding-bottom: 0; border-radius: 42px; overflow: hidden; }
+  .modal-overlay.active { display: flex; }
+  .modal-card { background: #FEFAF5; border-radius: 20px 20px 0 0; width: 100%; padding: 16px 20px 32px; }
+</style>
+</head>
+<body>
+
+<div style="display:flex; justify-content:center; gap:5px; margin-bottom:14px; flex-wrap:wrap;" id="step-pills"></div>
+
+<div class="ob-phone">
+<div class="ob-screen" id="ob-screen">
+
+  <!-- ══════ STEP 0: SPLASH ══════ -->
+  <div class="step active" id="step-0" style="background:#060F14; position:relative;">
+    <div class="ob-notch" style="background:#060F14;"></div>
+    <svg style="position:absolute;inset:0;" width="316" height="720" viewBox="0 0 316 720">
+      <rect width="316" height="720" fill="#060F14"/>
+      <!-- Stars cream -->
+      <circle cx="25" cy="36" r="1.4" fill="#E8D5B8" opacity="0.55"/>
+      <circle cx="77" cy="20" r="1.7" fill="#E8D5B8" opacity="0.6"/>
+      <circle cx="136" cy="13" r="1.4" fill="#E8D5B8" opacity="0.5"/>
+      <circle cx="260" cy="18" r="1.6" fill="#E8D5B8" opacity="0.5"/>
+      <circle cx="291" cy="54" r="1.2" fill="#E8D5B8" opacity="0.38"/>
+      <circle cx="50" cy="74" r="1" fill="#E8D5B8" opacity="0.4"/>
+      <circle cx="107" cy="62" r="1.4" fill="#E8D5B8" opacity="0.5"/>
+      <circle cx="167" cy="88" r="1.2" fill="#E8D5B8" opacity="0.35"/>
+      <circle cx="303" cy="84" r="1.2" fill="#E8D5B8" opacity="0.35"/>
+      <circle cx="20" cy="122" r="0.9" fill="#E8D5B8" opacity="0.3"/>
+      <circle cx="82" cy="108" r="1.2" fill="#E8D5B8" opacity="0.4"/>
+      <circle cx="149" cy="128" r="1" fill="#E8D5B8" opacity="0.3"/>
+      <circle cx="213" cy="112" r="1.4" fill="#E8D5B8" opacity="0.42"/>
+      <circle cx="277" cy="125" r="0.9" fill="#E8D5B8" opacity="0.32"/>
+      <circle cx="43" cy="156" r="1" fill="#E8D5B8" opacity="0.26"/>
+      <circle cx="184" cy="168" r="1" fill="#E8D5B8" opacity="0.25"/>
+      <circle cx="34" cy="215" r="0.7" fill="#E8D5B8" opacity="0.2"/>
+      <circle cx="285" cy="198" r="0.8" fill="#E8D5B8" opacity="0.22"/>
+      <!-- Teal accent stars -->
+      <circle cx="198" cy="41" r="4" fill="#3CC4C4" opacity="0.7"/>
+      <circle cx="237" cy="67" r="3.5" fill="#3CC4C4" opacity="0.55"/>
+      <circle cx="119" cy="147" r="3" fill="#3CC4C4" opacity="0.45"/>
+      <circle cx="108" cy="62" r="3" fill="#3CC4C4" opacity="0.38"/>
+      <circle cx="277" cy="125" r="2.5" fill="#3CC4C4" opacity="0.32"/>
+      <!-- Purple accent stars -->
+      <circle cx="59" cy="30" r="3.2" fill="#7F77DD" opacity="0.7"/>
+      <circle cx="258" cy="100" r="2.8" fill="#7F77DD" opacity="0.6"/>
+      <circle cx="161" cy="56" r="2.2" fill="#7F77DD" opacity="0.55"/>
+      <circle cx="20" cy="175" r="2" fill="#7F77DD" opacity="0.45"/>
+      <!-- Ocean band -->
+      <rect x="0" y="550" width="316" height="170" fill="#0B2230"/>
+      <path d="M0 555 Q80 545,158 555 Q238 565,316 555" fill="none" stroke="#1B5A6A" stroke-width="1.2" opacity="0.4"/>
+      <path d="M0 574 Q80 564,158 574 Q238 584,316 574" fill="none" stroke="#1B5A6A" stroke-width="0.8" opacity="0.25"/>
+    </svg>
+    <!-- Logo + text -->
+    <div style="position:absolute;top:0;left:0;right:0;bottom:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 40px;">
+      <div style="width:90px;height:90px;border-radius:22px;background:#1B7A87;display:flex;align-items:center;justify-content:center;margin-bottom:24px;">
+        <div style="width:62px;height:62px;border-radius:14px;background:#0F5A65;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:12px;">
+          <div style="width:38px;height:3px;background:#E8D5B8;border-radius:2px;"></div>
+          <div style="width:38px;height:2.5px;background:#E8D5B8;border-radius:2px;opacity:0.6;"></div>
+          <div style="width:38px;height:2px;background:#E8D5B8;border-radius:2px;opacity:0.3;"></div>
+        </div>
+      </div>
+      <div style="font-family:Georgia,serif;font-size:42px;font-weight:700;color:#E8D5B8;letter-spacing:4px;margin-bottom:8px;">Lineups</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#4A7A87;letter-spacing:6px;margin-bottom:50px;">SURF JOURNAL</div>
+      <div style="font-family:Georgia,serif;font-size:14px;color:#3A5A65;font-style:italic;">every break, remembered</div>
+    </div>
+    <div style="position:absolute;bottom:0;left:0;right:0;padding:0 28px 52px;">
+      <div class="ob-btn-primary-dark" style="margin-bottom:12px;" onclick="goTo(1)">Get started</div>
+      <div class="ob-btn-ghost-dark" onclick="goTo(1)">Log in</div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 1: SIGN UP ══════ -->
+  <div class="step" id="step-1" style="background:#0B2230;">
+    <div class="ob-notch" style="background:#0B2230;"></div>
+    <div style="padding:64px 28px 28px;flex:1;display:flex;flex-direction:column;overflow-y:auto;">
+      <div class="ob-progress" id="progress-1"></div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#E8D5B8;margin-bottom:6px;">Create your account</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#4A7A87;letter-spacing:0.5px;margin-bottom:28px;">Start logging your sessions</div>
+      <input class="ob-input-dark" placeholder="Email address" type="email"/>
+      <input class="ob-input-dark" placeholder="Password" type="password"/>
+      <input class="ob-input-dark" placeholder="Confirm password" type="password"/>
+      <div style="flex:1;"></div>
+      <div class="ob-btn-primary-dark" style="margin-bottom:14px;" onclick="goTo(2)">Continue</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#4A7A87;text-align:center;margin-bottom:12px;">Or continue with</div>
+      <div style="display:flex;gap:10px;">
+        <div style="flex:1;background:#0F2D3A;border:0.5px solid #1B5A6A;border-radius:12px;padding:11px;text-align:center;cursor:pointer;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#E8D5B8;">Apple</span></div>
+        <div style="flex:1;background:#0F2D3A;border:0.5px solid #1B5A6A;border-radius:12px;padding:11px;text-align:center;cursor:pointer;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#E8D5B8;">Google</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 2: PROFILE SETUP ══════ -->
+  <div class="step" id="step-2" style="background:#0B2230;">
+    <div class="ob-notch" style="background:#0B2230;"></div>
+    <div style="padding:64px 28px 28px;flex:1;display:flex;flex-direction:column;overflow-y:auto;">
+      <div class="ob-progress" id="progress-2"></div>
+      <div style="display:flex;justify-content:center;margin-bottom:20px;">
+        <div style="position:relative;cursor:pointer;">
+          <div style="width:76px;height:76px;border-radius:50%;background:#1B7A87;border:2px solid #3CC4C4;display:flex;align-items:center;justify-content:center;">
+            <span style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#E8D5B8;">E</span>
+          </div>
+          <div style="position:absolute;bottom:0;right:0;width:24px;height:24px;border-radius:50%;background:#3CC4C4;display:flex;align-items:center;justify-content:center;">
+            <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><line x1="5.5" y1="1" x2="5.5" y2="10" stroke="#0B2230" stroke-width="1.6" stroke-linecap="round"/><line x1="1" y1="5.5" x2="10" y2="5.5" stroke="#0B2230" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#E8D5B8;margin-bottom:6px;">Set up your profile</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#4A7A87;letter-spacing:0.5px;margin-bottom:24px;">How other surfers will find you</div>
+      <input class="ob-input-dark" placeholder="Display name"/>
+      <div style="position:relative;margin-bottom:10px;">
+        <span style="position:absolute;left:16px;top:50%;transform:translateY(-50%);font-family:'Helvetica Neue',sans-serif;font-size:13px;color:#2A5A65;">@</span>
+        <input class="ob-input-dark" placeholder="username" style="padding-left:30px;margin-bottom:0;"/>
+      </div>
+      <input class="ob-input-dark" placeholder="Short bio (optional)"/>
+      <div style="flex:1;"></div>
+      <div class="ob-btn-primary-dark" onclick="goTo(3)">Continue</div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 3: STANCE + HOME BREAK ══════ -->
+  <div class="step" id="step-3" style="background:#1A2E22;">
+    <div class="ob-notch" style="background:#1A2E22;"></div>
+    <div style="padding:64px 28px 28px;flex:1;display:flex;flex-direction:column;overflow-y:auto;">
+      <div class="ob-progress" id="progress-3"></div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#E8D5B8;margin-bottom:6px;">About your surfing</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#8ABBA0;letter-spacing:0.5px;margin-bottom:24px;">Helps personalise your experience</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#8ABBA0;letter-spacing:1.5px;margin-bottom:8px;">YOUR STANCE</div>
+      <div style="display:flex;gap:8px;margin-bottom:20px;">
+        <div class="ob-choice-dark sel" id="stance-regular" onclick="selectStance('regular')" style="flex:1;justify-content:center;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#3CC4C4;">Regular</span></div>
+        <div class="ob-choice-dark" id="stance-goofy" onclick="selectStance('goofy')" style="flex:1;justify-content:center;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#E8D5B8;">Goofy</span></div>
+      </div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#8ABBA0;letter-spacing:1.5px;margin-bottom:8px;">EXPERIENCE</div>
+      <div style="display:flex;gap:6px;margin-bottom:20px;">
+        <div class="ob-choice-dark" onclick="selectExp(this)" style="flex:1;justify-content:center;padding:9px 8px;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#E8D5B8;">Beginner</span></div>
+        <div class="ob-choice-dark" onclick="selectExp(this)" style="flex:1;justify-content:center;padding:9px 8px;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#E8D5B8;">Intermediate</span></div>
+        <div class="ob-choice-dark sel" onclick="selectExp(this)" style="flex:1;justify-content:center;padding:9px 8px;"><span style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#3CC4C4;">Advanced</span></div>
+      </div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#8ABBA0;letter-spacing:1.5px;margin-bottom:8px;">HOME BREAK</div>
+      <input class="ob-input-dark" placeholder="e.g. Rincon Point, Malibu..."/>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#2A5A65;margin-bottom:16px;padding:0 2px;">You can always add this later</div>
+      <div style="flex:1;"></div>
+      <div class="ob-btn-primary-dark" onclick="goTo(4)">Continue</div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 4: SURF HISTORY ══════ -->
+  <div class="step" id="step-4" style="background:#F5EDE0;position:relative;">
+    <div class="ob-notch" style="background:#F2E8D8;"></div>
+    <div style="padding:64px 24px 24px;flex:1;display:flex;flex-direction:column;overflow-y:auto;">
+      <div class="ob-progress" id="progress-4"></div>
+      <div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#2A1A08;margin-bottom:5px;">Log your surf history</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#A8845A;letter-spacing:0.3px;margin-bottom:18px;">Add breaks you've already surfed</div>
+      <!-- Search -->
+      <div style="background:#EDE0CC;border:0.5px solid #C5A882;border-radius:12px;padding:11px 14px;display:flex;gap:8px;align-items:center;margin-bottom:14px;">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="#A8845A" stroke-width="1.2"/><line x1="8.5" y1="8.5" x2="12" y2="12" stroke="#A8845A" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#C5A882;">Search breaks...</span>
+      </div>
+      <!-- Break rows -->
+      <div class="ob-break-row" id="br-rincon">
+        <div><div style="font-family:Georgia,serif;font-size:13px;font-weight:700;color:#2A1A08;">Rincon Point</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#A8845A;margin-top:1px;">Carpinteria, CA · Point break</div></div>
+        <div style="background:#1B7A87;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#E8D5B8;" onclick="addBreak('rincon')">+ Add</div>
+      </div>
+      <div class="ob-break-row added" id="br-malibu">
+        <div>
+          <div style="font-family:Georgia,serif;font-size:13px;font-weight:700;color:#2A1A08;">Malibu First Point</div>
+          <div style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#A8845A;margin-top:1px;">Malibu, CA · 6–50 sessions</div>
+          <div style="display:flex;gap:3px;margin-top:4px;">
+            <div style="width:8px;height:8px;border-radius:50%;background:#1B7A87;"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:#1B7A87;"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:#1B7A87;"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:#1B7A87;"></div>
+            <div style="width:8px;height:8px;border-radius:50%;background:transparent;border:1px solid #C5A882;"></div>
+          </div>
+        </div>
+        <div style="background:#E1F0EC;border:0.5px solid #1B7A87;border-radius:8px;padding:5px 10px;font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#1B7A87;">✓ Added</div>
+      </div>
+      <div class="ob-break-row" id="br-trestles">
+        <div><div style="font-family:Georgia,serif;font-size:13px;font-weight:700;color:#2A1A08;">Trestles</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#A8845A;margin-top:1px;">San Clemente, CA · Beach break</div></div>
+        <div style="background:#1B7A87;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#E8D5B8;" onclick="addBreak('trestles')">+ Add</div>
+      </div>
+      <div class="ob-break-row" id="br-swamis">
+        <div><div style="font-family:Georgia,serif;font-size:13px;font-weight:700;color:#2A1A08;">Swami's</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#A8845A;margin-top:1px;">Encinitas, CA · Reef break</div></div>
+        <div style="background:#1B7A87;border-radius:8px;padding:5px 12px;cursor:pointer;font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#E8D5B8;" onclick="addBreak('swamis')">+ Add</div>
+      </div>
+      <!-- Custom pin callout -->
+      <div style="background:#EDE0CC;border:0.5px dashed #C5A882;border-radius:10px;padding:12px 14px;margin-top:8px;margin-bottom:8px;">
+        <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#7A4E2A;margin-bottom:3px;">Not seeing your break?</div>
+        <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#1B7A87;">Drop a custom pin on the map after signing in →</div>
+      </div>
+      <div style="flex:1;"></div>
+      <div class="ob-btn-primary-light" style="margin-top:12px;" onclick="goTo(5)">Continue</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#A8845A;text-align:center;margin-top:12px;cursor:pointer;" onclick="goTo(5)">Skip — I'll add as I go</div>
+    </div>
+
+    <!-- Add break modal -->
+    <div class="modal-overlay" id="break-modal">
+      <div class="modal-card">
+        <div style="width:36px;height:4px;border-radius:2px;background:#D8C8B0;margin:0 auto 16px;"></div>
+        <div style="font-family:Georgia,serif;font-size:16px;font-weight:700;color:#2A1A08;margin-bottom:3px;" id="modal-break-name">Rincon Point</div>
+        <div style="font-family:'Helvetica Neue',sans-serif;font-size:10px;color:#A8845A;margin-bottom:14px;" id="modal-break-sub">Carpinteria, CA · Point break · Right</div>
+        <div style="height:0.5px;background:#F0E4D0;margin-bottom:14px;"></div>
+        <div class="lf-form-label">YOUR RATING</div>
+        <div class="dot-rating" style="margin-bottom:16px;" id="modal-dots">
+          <div class="rating-dot filled" onclick="setRating(1)"></div>
+          <div class="rating-dot filled" onclick="setRating(2)"></div>
+          <div class="rating-dot filled" onclick="setRating(3)"></div>
+          <div class="rating-dot filled" onclick="setRating(4)"></div>
+          <div class="rating-dot" onclick="setRating(5)"></div>
+        </div>
+        <div style="height:0.5px;background:#F0E4D0;margin-bottom:14px;"></div>
+        <div class="lf-form-label">APPROX. SESSIONS</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;" id="session-chips">
+          <div class="session-chip" onclick="selectChip(this)">1–5</div>
+          <div class="session-chip sel" onclick="selectChip(this)">6–50</div>
+          <div class="session-chip" onclick="selectChip(this)">51–200</div>
+          <div class="session-chip" onclick="selectChip(this)">200+</div>
+        </div>
+        <div style="height:0.5px;background:#F0E4D0;margin-bottom:14px;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#2A1A08;">Mark as favorite</span>
+          <div style="width:38px;height:22px;border-radius:11px;background:#D8C8B0;position:relative;cursor:pointer;" id="fav-toggle" onclick="toggleFav()">
+            <div style="position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#FEFAF5;transition:left 0.2s;" id="fav-thumb"></div>
+          </div>
+        </div>
+        <div style="background:#1B7A87;border-radius:12px;padding:13px;text-align:center;cursor:pointer;font-family:'Helvetica Neue',sans-serif;font-size:13px;color:#E8D5B8;font-weight:500;" onclick="saveBreak()">Save break</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 5: FIND FRIENDS ══════ -->
+  <div class="step" id="step-5" style="background:#F5EDE0;">
+    <div class="ob-notch" style="background:#F2E8D8;"></div>
+    <div style="padding:64px 24px 24px;flex:1;display:flex;flex-direction:column;">
+      <div class="ob-progress" id="progress-5"></div>
+      <div style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#2A1A08;margin-bottom:6px;">Find your crew</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#A8845A;letter-spacing:0.5px;margin-bottom:18px;">Follow surfers you know</div>
+      <div style="background:#EDE0CC;border:0.5px solid #C5A882;border-radius:12px;padding:11px 14px;display:flex;gap:8px;align-items:center;margin-bottom:16px;">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="5.5" cy="5.5" r="4" stroke="#A8845A" stroke-width="1.2"/><line x1="8.5" y1="8.5" x2="12" y2="12" stroke="#A8845A" stroke-width="1.2" stroke-linecap="round"/></svg>
+        <span style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#C5A882;">Search by name or username...</span>
+      </div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;letter-spacing:1.5px;margin-bottom:10px;">SUGGESTED</div>
+      <div style="flex:1;overflow-y:auto;scrollbar-width:none;">
+        <div class="ob-friend-row"><div class="ob-avatar" style="background:#C5A882;color:#4A2D0E;">MR</div><div style="flex:1;"><div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;font-weight:500;color:#2A1A08;">Marco Rivera</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;">@marcorivera · 31 breaks</div></div><button class="ob-follow-btn following" onclick="toggleFriendFollow(this)">Following</button></div>
+        <div class="ob-friend-row"><div class="ob-avatar" style="background:#7F77DD;color:#EEEDFE;">JK</div><div style="flex:1;"><div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;font-weight:500;color:#2A1A08;">Jess Kim</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;">@jesskim · 18 breaks</div></div><button class="ob-follow-btn following" onclick="toggleFriendFollow(this)">Following</button></div>
+        <div class="ob-friend-row"><div class="ob-avatar" style="background:#1B7A87;color:#E8D5B8;">TW</div><div style="flex:1;"><div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;font-weight:500;color:#2A1A08;">Tyler Walsh</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;">@tylerw · 44 breaks</div></div><button class="ob-follow-btn" onclick="toggleFriendFollow(this)">Follow</button></div>
+        <div class="ob-friend-row"><div class="ob-avatar" style="background:#A8845A;color:#EDE0CC;">SL</div><div style="flex:1;"><div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;font-weight:500;color:#2A1A08;">Sofia Lim</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;">@sofialim · 22 breaks</div></div><button class="ob-follow-btn" onclick="toggleFriendFollow(this)">Follow</button></div>
+        <div class="ob-friend-row"><div class="ob-avatar" style="background:#2A1A08;color:#C5A882;">DK</div><div style="flex:1;"><div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;font-weight:500;color:#2A1A08;">Danny Kowalski</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;">@dannyk · 9 breaks</div></div><button class="ob-follow-btn" onclick="toggleFriendFollow(this)">Follow</button></div>
+      </div>
+      <div class="ob-btn-primary-light" style="margin-top:16px;" onclick="goTo(6)">Continue</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:11px;color:#A8845A;text-align:center;margin-top:12px;cursor:pointer;" onclick="goTo(6)">Skip for now</div>
+    </div>
+  </div>
+
+  <!-- ══════ STEP 6: DONE ══════ -->
+  <div class="step" id="step-6" style="background:#F5EDE0;">
+    <div class="ob-notch" style="background:#F2E8D8;"></div>
+    <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 36px;text-align:center;">
+      <div style="width:70px;height:70px;border-radius:18px;background:#1B7A87;display:flex;align-items:center;justify-content:center;margin-bottom:28px;">
+        <div style="width:48px;height:48px;border-radius:11px;background:#0F5A65;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;padding:9px;">
+          <div style="width:30px;height:2.5px;background:#E8D5B8;border-radius:2px;"></div>
+          <div style="width:30px;height:2px;background:#E8D5B8;border-radius:2px;opacity:0.6;"></div>
+          <div style="width:30px;height:1.5px;background:#E8D5B8;border-radius:2px;opacity:0.3;"></div>
+        </div>
+      </div>
+      <div style="font-family:Georgia,serif;font-size:30px;font-weight:700;color:#2A1A08;margin-bottom:10px;">You're in the lineup</div>
+      <div style="font-family:'Helvetica Neue',sans-serif;font-size:12px;color:#A8845A;line-height:1.7;margin-bottom:10px;">Start logging your sessions,<br>explore breaks, and build your list.</div>
+      <div style="font-family:Georgia,serif;font-size:13px;color:#C5A882;font-style:italic;margin-bottom:48px;">every break, remembered</div>
+      <div style="display:flex;gap:20px;margin-bottom:52px;">
+        <div style="text-align:center;"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1B7A87;" id="done-surfs">0</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;letter-spacing:1px;margin-top:3px;">SURFS</div></div>
+        <div style="width:0.5px;background:#D8C8B0;"></div>
+        <div style="text-align:center;"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1B7A87;" id="done-breaks">0</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;letter-spacing:1px;margin-top:3px;">BREAKS</div></div>
+        <div style="width:0.5px;background:#D8C8B0;"></div>
+        <div style="text-align:center;"><div style="font-family:Georgia,serif;font-size:26px;font-weight:700;color:#1B7A87;">0</div><div style="font-family:'Helvetica Neue',sans-serif;font-size:9px;color:#A8845A;letter-spacing:1px;margin-top:3px;">COUNTRIES</div></div>
+      </div>
+      <div class="ob-btn-primary-light" style="width:100%;" onclick="goTo(0)">Open Lineups</div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<div style="display:flex;justify-content:center;gap:4px;margin-top:14px;flex-wrap:wrap;padding:0 20px;" id="step-labels"></div>
+
+<script>
+var current = 0;
+var total = 7;
+var labels = ['Splash','Sign up','Profile','Stance','History','Friends','Done'];
+var addedBreaks = 1;
+var currentBreakId = '';
+var rating = 4;
+var favOn = false;
+
+function renderUI() {
+  var pills = document.getElementById('step-pills');
+  pills.innerHTML = '';
+  for (var i = 0; i < total; i++) {
+    var b = document.createElement('button');
+    b.textContent = labels[i];
+    b.style.cssText = 'font-family:Helvetica Neue,sans-serif;font-size:9px;letter-spacing:0.8px;padding:4px 9px;border-radius:6px;cursor:pointer;border:0.5px solid;transition:all 0.15s;';
+    if (i === current) { b.style.background='#1B7A87'; b.style.color='#E8D5B8'; b.style.borderColor='#1B7A87'; }
+    else if (i < current) { b.style.background='#0F5A65'; b.style.color='#3CC4C4'; b.style.borderColor='#0F5A65'; }
+    else { b.style.background='#0F2D3A'; b.style.color='#4A7A87'; b.style.borderColor='#1B3A45'; }
+    (function(idx){ b.onclick = function(){ goTo(idx); }; })(i);
+    pills.appendChild(b);
+  }
+  for (var s = 1; s <= 5; s++) {
+    var p = document.getElementById('progress-' + s);
+    if (!p) continue;
+    p.innerHTML = '';
+    for (var d = 1; d <= 5; d++) {
+      var dot = document.createElement('div');
+      dot.className = 'ob-prog-dot' + (d < s ? ' done' : d === s ? ' active' : '');
+      p.appendChild(dot);
+    }
+  }
+  var sl = document.getElementById('step-labels');
+  sl.innerHTML = '';
+  for (var i = 0; i < total; i++) {
+    var sp = document.createElement('span');
+    sp.textContent = (i+1) + '. ' + labels[i];
+    sp.style.cssText = 'font-family:Helvetica Neue,sans-serif;font-size:9px;letter-spacing:0.5px;padding:3px 6px;border-radius:4px;';
+    sp.style.color = i === current ? '#3CC4C4' : '#2A5A65';
+    sp.style.fontWeight = i === current ? '500' : '400';
+    sl.appendChild(sp);
+  }
+}
+
+function goTo(n) {
+  if (n >= total) n = 0;
+  document.getElementById('step-' + current).classList.remove('active');
+  current = n;
+  document.getElementById('step-' + current).classList.add('active');
+  renderUI();
+}
+
+var breakData = {
+  rincon: { name: 'Rincon Point', sub: 'Carpinteria, CA · Point break · Right' },
+  trestles: { name: 'Trestles', sub: 'San Clemente, CA · Beach break · A-frame' },
+  swamis: { name: "Swami's", sub: 'Encinitas, CA · Reef break · Right' }
+};
+
+function addBreak(id) {
+  currentBreakId = id;
+  rating = 4;
+  favOn = false;
+  document.getElementById('modal-break-name').textContent = breakData[id].name;
+  document.getElementById('modal-break-sub').textContent = breakData[id].sub;
+  updateDots();
+  document.getElementById('fav-thumb').style.left = '3px';
+  document.getElementById('fav-toggle').style.background = '#D8C8B0';
+  document.querySelectorAll('.session-chip').forEach(function(c,i){ c.classList.toggle('sel', i===1); });
+  document.getElementById('break-modal').classList.add('active');
+}
+
+function saveBreak() {
+  document.getElementById('break-modal').classList.remove('active');
+  var row = document.getElementById('br-' + currentBreakId);
+  if (row) {
+    row.classList.add('added');
+    var btn = row.querySelector('div[onclick]');
+    if (btn) { btn.style.background='#E1F0EC'; btn.style.border='0.5px solid #1B7A87'; btn.style.color='#1B7A87'; btn.textContent='✓ Added'; btn.onclick=null; }
+    var metaDiv = row.querySelector('div > div:nth-child(2)');
+    var chipSel = document.querySelector('.session-chip.sel');
+    var sessions = chipSel ? chipSel.textContent : '1–5';
+    if (metaDiv) metaDiv.textContent = breakData[currentBreakId].sub.split('·')[0].trim() + ' · ' + sessions + ' sessions';
+    var dotsDiv = document.createElement('div');
+    dotsDiv.style.cssText = 'display:flex;gap:3px;margin-top:4px;';
+    for (var i=1;i<=5;i++) {
+      var d = document.createElement('div');
+      d.style.cssText = 'width:8px;height:8px;border-radius:50%;' + (i<=rating ? 'background:#1B7A87;' : 'background:transparent;border:1px solid #C5A882;');
+      dotsDiv.appendChild(d);
+    }
+    row.querySelector('div').appendChild(dotsDiv);
+    addedBreaks++;
+  }
+}
+
+function setRating(n) {
+  rating = n;
+  updateDots();
+}
+function updateDots() {
+  var dots = document.querySelectorAll('#modal-dots .rating-dot');
+  dots.forEach(function(d,i){ d.classList.toggle('filled', i < rating); });
+}
+function selectChip(el) {
+  document.querySelectorAll('.session-chip').forEach(function(c){ c.classList.remove('sel'); });
+  el.classList.add('sel');
+}
+function toggleFav() {
+  favOn = !favOn;
+  document.getElementById('fav-thumb').style.left = favOn ? '19px' : '3px';
+  document.getElementById('fav-toggle').style.background = favOn ? '#1B7A87' : '#D8C8B0';
+}
+function selectStance(s) {
+  document.getElementById('stance-regular').classList.toggle('sel', s==='regular');
+  document.getElementById('stance-goofy').classList.toggle('sel', s==='goofy');
+  document.getElementById('stance-regular').querySelector('span').style.color = s==='regular' ? '#3CC4C4' : '#E8D5B8';
+  document.getElementById('stance-goofy').querySelector('span').style.color = s==='goofy' ? '#3CC4C4' : '#E8D5B8';
+}
+function selectExp(el) {
+  document.querySelectorAll('#step-3 .ob-choice-dark').forEach(function(c){
+    if (c.id !== 'stance-regular' && c.id !== 'stance-goofy') { c.classList.remove('sel'); c.querySelector('span').style.color='#E8D5B8'; }
+  });
+  el.classList.add('sel');
+  el.querySelector('span').style.color='#3CC4C4';
+}
+function toggleFriendFollow(btn) {
+  var f = btn.classList.contains('following');
+  if (f) { btn.classList.remove('following'); btn.textContent='Follow'; }
+  else { btn.classList.add('following'); btn.textContent='Following'; }
+}
+
+renderUI();
+</script>
+</body>
+</html>
