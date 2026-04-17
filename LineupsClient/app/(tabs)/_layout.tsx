@@ -31,10 +31,10 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen
-        name="map"
+        name="feed"
         options={{
-          title: 'Map',
-          tabBarIcon: tabIcon('map', 'map-outline'),
+          title: 'Feed',
+          tabBarIcon: tabIcon('people', 'people-outline'),
         }}
       />
       <Tabs.Screen
@@ -45,17 +45,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
+        name="map"
+        options={{
+          title: 'Map',
+          tabBarIcon: tabIcon('map', 'map-outline'),
+        }}
+      />
+      <Tabs.Screen
         name="journal"
         options={{
           title: 'Journal',
           tabBarIcon: tabIcon('book', 'book-outline'),
-        }}
-      />
-      <Tabs.Screen
-        name="feed"
-        options={{
-          title: 'Feed',
-          tabBarIcon: tabIcon('people', 'people-outline'),
         }}
       />
       <Tabs.Screen

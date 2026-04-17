@@ -65,6 +65,9 @@ interface RatedBreak {
     type: string | null
     direction: string | null
   } | null
+  // enriched from sessions table
+  sessionCount: number
+  avgSessionRating: number | null
 }
 
 interface WishlistBreak {
@@ -121,21 +124,38 @@ function BreakRow({ item, rank }: { item: RatedBreak; rank: number }) {
       onPress={() => router.push({ pathname: '/break-detail', params: { id: item.break_id, name: b.name } })}
     >
       <Text style={[styles.breakRank, rank <= 2 && styles.breakRankTop]}>{rank}</Text>
+
+      {/* Center body */}
       <View style={styles.breakInfo}>
         <Text style={styles.breakName} numberOfLines={1}>{b.name}</Text>
         <View style={styles.breakPills}>
           {b.type && <Pill label={b.type} bg="#EEEDFE" color="#534AB7" />}
           {b.direction && <Pill label={b.direction} bg="#E1F5EE" color="#0F6E56" />}
         </View>
+        {item.sessionCount > 0 && (
+          <View style={styles.sessionStatsRow}>
+            <Text style={styles.sessionStatText}>{item.sessionCount} sessions</Text>
+            {item.avgSessionRating != null && (
+              <>
+                <Text style={styles.sessionStatText}> · </Text>
+                <Text style={styles.sessionAvgText}>
+                  {item.avgSessionRating.toFixed(1)} avg
+                </Text>
+              </>
+            )}
+          </View>
+        )}
       </View>
+
+      {/* Right side */}
       <View style={styles.breakRight}>
-        {item.rating != null && item.rating > 0 && <DotRating rating={item.rating} />}
-        <View style={styles.breakMeta}>
-          {item.approx_sessions != null && item.approx_sessions > 0 && (
-            <Text style={styles.surfCount}>{item.approx_sessions} surfs</Text>
-          )}
-          {item.is_favorite && <View style={styles.favDot} />}
-        </View>
+        {item.rating != null && item.rating > 0 && (
+          <View style={styles.ratingBlock}>
+            <Text style={styles.breakRatingLabel}>BREAK</Text>
+            <DotRating rating={item.rating} />
+          </View>
+        )}
+        {item.is_favorite && <View style={styles.favDot} />}
       </View>
     </TouchableOpacity>
   )
@@ -156,7 +176,7 @@ function BreaksTab({ ratings }: { ratings: RatedBreak[] }) {
     const sortFn = (a: RatedBreak, b: RatedBreak) => {
       const rA = a.rating ?? -1, rB = b.rating ?? -1
       if (rB !== rA) return rB - rA
-      return (b.approx_sessions ?? 0) - (a.approx_sessions ?? 0)
+      return b.sessionCount - a.sessionCount
     }
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
@@ -289,7 +309,7 @@ export default function ProfileScreen() {
           .single(),
 
         supabase.from('sessions')
-          .select('break_id')
+          .select('break_id, rating')
           .eq('user_id', targetId),
 
         supabase.from('break_ratings')
@@ -312,13 +332,35 @@ export default function ProfileScreen() {
       if (profileData) setProfile(profileData as Profile)
 
       // Session stats
-      const sessions = sessionData ?? []
+      const sessions = (sessionData ?? []) as Array<{ break_id: string; rating: number | null }>
       setSurfCount(sessions.length)
-      const distinctBreaks = new Set(sessions.map((s: any) => s.break_id).filter(Boolean))
+      const distinctBreaks = new Set(sessions.map(s => s.break_id).filter(Boolean))
       setBreakCount(distinctBreaks.size)
 
+      // Build per-break session count + avg rating
+      const sessionCountMap = new Map<string, number>()
+      const sessionRatingSumMap = new Map<string, number>()
+      const sessionRatingCountMap = new Map<string, number>()
+      for (const s of sessions) {
+        if (!s.break_id) continue
+        sessionCountMap.set(s.break_id, (sessionCountMap.get(s.break_id) ?? 0) + 1)
+        if (s.rating != null && s.rating > 0) {
+          sessionRatingSumMap.set(s.break_id, (sessionRatingSumMap.get(s.break_id) ?? 0) + s.rating)
+          sessionRatingCountMap.set(s.break_id, (sessionRatingCountMap.get(s.break_id) ?? 0) + 1)
+        }
+      }
+
       // Countries: distinct regions derived from rated break lat/lng
-      const ratedRows = (ratingData ?? []) as unknown as RatedBreak[]
+      const ratedRows = ((ratingData ?? []) as unknown as RatedBreak[]).map(r => {
+        const count = sessionCountMap.get(r.break_id) ?? 0
+        const rCount = sessionRatingCountMap.get(r.break_id) ?? 0
+        const rSum = sessionRatingSumMap.get(r.break_id) ?? 0
+        return {
+          ...r,
+          sessionCount: count,
+          avgSessionRating: count >= 3 && rCount > 0 ? rSum / rCount : null,
+        }
+      })
       const regions = new Set(ratedRows.map(r => r.breaks ? regionFromLatLng(r.breaks.lat, r.breaks.lng) : null).filter(Boolean))
       setCountryCount(regions.size || Math.ceil(distinctBreaks.size / 3) || 0)
 
@@ -843,18 +885,34 @@ const styles = StyleSheet.create({
   },
   breakRight: {
     alignItems: 'flex-end',
-    gap: 4,
+    gap: 5,
     flexShrink: 0,
   },
-  breakMeta: {
+  ratingBlock: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  breakRatingLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 7,
+    color: '#A8845A',
+    letterSpacing: 1,
+  },
+  sessionStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    marginTop: 4,
   },
-  surfCount: {
+  sessionStatText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 8,
     color: '#A8845A',
+  },
+  sessionAvgText: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 8,
+    color: '#1B7A87',
   },
   favDot: {
     width: 7,

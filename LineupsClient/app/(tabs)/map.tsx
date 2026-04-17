@@ -36,8 +36,8 @@ interface BreakWithStatus extends Break {
 
 interface CalloutStats {
   sessions: number
-  bestSwell: string
-  lastSurf: string
+  breakRating: number | null   // 1–5
+  avgSessionRating: number | null  // 1–10, only set when sessions >= 3
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -186,31 +186,35 @@ export default function MapScreen() {
     const { data: { session } } = await supabase.auth.getSession()
     const userId = session?.user?.id
     if (!userId) {
-      setCalloutStats({ sessions: 0, bestSwell: '—', lastSurf: '—' })
+      setCalloutStats({ sessions: 0, breakRating: null, avgSessionRating: null })
       return
     }
 
-    const { data } = await supabase
-      .from('sessions')
-      .select('date, swell_height')
-      .eq('break_id', breakId)
-      .eq('user_id', userId)
-      .order('date', { ascending: false })
+    const [{ data: sessionsData }, { data: ratingData }] = await Promise.all([
+      supabase
+        .from('sessions')
+        .select('rating')
+        .eq('break_id', breakId)
+        .eq('user_id', userId),
+      supabase
+        .from('break_ratings')
+        .select('rating')
+        .eq('break_id', breakId)
+        .eq('user_id', userId)
+        .maybeSingle(),
+    ])
 
-    if (!data || data.length === 0) {
-      setCalloutStats({ sessions: 0, bestSwell: '—', lastSurf: '—' })
-      return
-    }
-
-    const bestSwell = Math.max(...data.map((s: any) => s.swell_height ?? 0))
-    const lastDate  = data[0]?.date
-      ? new Date(data[0].date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-      : '—'
+    const count = sessionsData?.length ?? 0
+    const rated = (sessionsData ?? []).filter((s: any) => s.rating != null && s.rating > 0)
+    const avg =
+      count >= 3 && rated.length > 0
+        ? rated.reduce((sum: number, s: any) => sum + s.rating, 0) / rated.length
+        : null
 
     setCalloutStats({
-      sessions: data.length,
-      bestSwell: bestSwell > 0 ? `${bestSwell}ft` : '—',
-      lastSurf: lastDate,
+      sessions: count,
+      breakRating: ratingData?.rating ?? null,
+      avgSessionRating: avg,
     })
   }
 
@@ -367,18 +371,46 @@ export default function MapScreen() {
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            {(
-              [
-                { label: 'SESSIONS',   value: calloutStats?.sessions?.toString() ?? '—' },
-                { label: 'BEST SWELL', value: calloutStats?.bestSwell ?? '—' },
-                { label: 'LAST SURF',  value: calloutStats?.lastSurf  ?? '—' },
-              ] as const
-            ).map(({ label, value }) => (
-              <View key={label} style={styles.statTile}>
-                <Text style={styles.statLabel}>{label}</Text>
-                <Text style={styles.statValue}>{value}</Text>
+            {/* Sessions */}
+            <View style={styles.statTile}>
+              <Text style={styles.statLabel}>SESSIONS</Text>
+              <Text style={styles.statValue}>
+                {calloutStats?.sessions != null ? String(calloutStats.sessions) : '—'}
+              </Text>
+            </View>
+
+            {/* Break rating dots */}
+            <View style={styles.statTile}>
+              <Text style={styles.statLabel}>BREAK</Text>
+              <View style={styles.statDotsRow}>
+                {[1, 2, 3, 4, 5].map(i => (
+                  <View
+                    key={i}
+                    style={[
+                      styles.statDot,
+                      (calloutStats?.breakRating ?? 0) >= i
+                        ? styles.statDotFilled
+                        : styles.statDotEmpty,
+                    ]}
+                  />
+                ))}
               </View>
-            ))}
+            </View>
+
+            {/* Avg session rating */}
+            <View style={styles.statTile}>
+              <Text style={styles.statLabel}>AVG SESSION</Text>
+              <Text style={[
+                styles.statValue,
+                calloutStats?.avgSessionRating != null
+                  ? styles.statValueTeal
+                  : styles.statValueDim,
+              ]}>
+                {calloutStats?.avgSessionRating != null
+                  ? calloutStats.avgSessionRating.toFixed(1)
+                  : '—'}
+              </Text>
+            </View>
           </View>
 
           {/* CTAs */}
@@ -641,6 +673,31 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 17,
     color: '#E8D5B8',
+  },
+  statValueTeal: {
+    color: '#3CC4C4',
+  },
+  statValueDim: {
+    color: '#4A7A87',
+  },
+  statDotsRow: {
+    flexDirection: 'row',
+    gap: 3,
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  statDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statDotFilled: {
+    backgroundColor: '#3CC4C4',
+  },
+  statDotEmpty: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#C5A882',
   },
 
   // CTAs

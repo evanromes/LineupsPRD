@@ -6,7 +6,7 @@ export default function Index() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        router.replace('/(tabs)/map')
+        router.replace('/(tabs)/feed')
       } else {
         router.replace('/(auth)/login')
       }
@@ -14,7 +14,7 @@ export default function Index() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        router.replace('/(tabs)/map')
+        router.replace('/(tabs)/feed')
       } else {
         router.replace('/(auth)/login')
       }

@@ -191,6 +191,11 @@ export default function BreakDetailScreen() {
   const [communityCount, setCommunityCount] = useState(0)
   const [currentUserId, setCurrentUserId]   = useState<string | null>(null)
 
+  // Edit break rating state
+  const [editRatingExpanded, setEditRatingExpanded] = useState(false)
+  const [pendingBreakRating, setPendingBreakRating] = useState(0)
+  const [savingRating, setSavingRating]             = useState(false)
+
   useEffect(() => {
     if (id) fetchAll(id)
   }, [id])
@@ -283,6 +288,30 @@ export default function BreakDetailScreen() {
     }
   }
 
+  // ─── Save break rating ──────────────────────────────────────────────────────
+
+  async function saveBreakRating() {
+    if (!id || !currentUserId || pendingBreakRating === 0) return
+    setSavingRating(true)
+    try {
+      const { error } = await supabase
+        .from('break_ratings')
+        .upsert(
+          { user_id: currentUserId, break_id: id, rating: pendingBreakRating },
+          { onConflict: 'user_id,break_id' }
+        )
+      if (error) throw error
+      setUserRating(prev =>
+        prev
+          ? { ...prev, rating: pendingBreakRating }
+          : { rating: pendingBreakRating, approx_sessions: null, is_favorite: false }
+      )
+      setEditRatingExpanded(false)
+    } finally {
+      setSavingRating(false)
+    }
+  }
+
   // ─── Navigation ─────────────────────────────────────────────────────────────
 
   function goBack() {
@@ -301,6 +330,15 @@ export default function BreakDetailScreen() {
   const breakName = details?.name ?? name ?? 'Break'
   const isVisited = userRating != null
   const isFavorite = userRating?.is_favorite ?? false
+
+  // Derived stats from fetched sessions
+  const ownSessions = sessions.filter(s => s.isOwn)
+  const ownSessionCount = ownSessions.length
+  const ratedSessions = ownSessions.filter(s => s.rating != null && s.rating > 0)
+  const avgSessionRating =
+    ownSessionCount >= 3 && ratedSessions.length > 0
+      ? ratedSessions.reduce((sum, s) => sum + (s.rating ?? 0), 0) / ratedSessions.length
+      : null
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -333,33 +371,86 @@ export default function BreakDetailScreen() {
           <View style={styles.statsRow}>
             {/* Sessions */}
             <View style={styles.statTile}>
-              <Text style={styles.statValue}>
-                {userRating?.approx_sessions != null ? String(userRating.approx_sessions) : '—'}
-              </Text>
-              <Text style={styles.statLabel}>MY SURFS</Text>
+              <Text style={styles.statValue}>{ownSessionCount > 0 ? String(ownSessionCount) : '—'}</Text>
+              <Text style={styles.statLabel}>SESSIONS</Text>
             </View>
 
-            {/* Rating */}
+            {/* Break rating */}
             <View style={styles.statTile}>
               {userRating?.rating != null ? (
                 <>
                   <DotRating rating={userRating.rating} size={8} />
-                  <Text style={[styles.statLabel, { marginTop: 6 }]}>MY RATING</Text>
+                  <Text style={[styles.statLabel, { marginTop: 6 }]}>BREAK RATING</Text>
                 </>
               ) : (
                 <>
                   <Text style={styles.statValue}>—</Text>
-                  <Text style={styles.statLabel}>MY RATING</Text>
+                  <Text style={styles.statLabel}>BREAK RATING</Text>
                 </>
               )}
             </View>
 
-            {/* Community */}
+            {/* Avg session */}
             <View style={styles.statTile}>
-              <Text style={styles.statValue}>{communityCount}</Text>
-              <Text style={styles.statLabel}>TOTAL SURFS</Text>
+              <Text style={styles.statValue}>
+                {avgSessionRating != null ? avgSessionRating.toFixed(1) : '—'}
+              </Text>
+              <Text style={styles.statLabel}>AVG SESSION</Text>
             </View>
           </View>
+
+          {/* ── Edit break rating row ── */}
+          {currentUserId != null && (
+            <View style={styles.editRatingWrapper}>
+              <TouchableOpacity
+                style={styles.editRatingRow}
+                onPress={() => {
+                  setPendingBreakRating(userRating?.rating ?? 0)
+                  setEditRatingExpanded(v => !v)
+                }}
+                activeOpacity={0.75}
+              >
+                <Text style={styles.editRatingLabel}>Your break rating</Text>
+                <DotRating rating={userRating?.rating ?? 0} size={8} />
+                <Text style={styles.editRatingLink}>
+                  {editRatingExpanded ? 'Cancel' : 'Edit →'}
+                </Text>
+              </TouchableOpacity>
+
+              {editRatingExpanded && (
+                <View style={styles.editRatingPanel}>
+                  <View style={styles.editDotsRow}>
+                    {[1, 2, 3, 4, 5].map(i => (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => setPendingBreakRating(i)}
+                        activeOpacity={0.7}
+                      >
+                        <View
+                          style={[
+                            styles.editDot,
+                            i <= pendingBreakRating ? styles.dotFilled : styles.dotEmpty,
+                          ]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.saveRatingBtn, savingRating && { opacity: 0.6 }]}
+                    onPress={saveBreakRating}
+                    disabled={savingRating || pendingBreakRating === 0}
+                    activeOpacity={0.8}
+                  >
+                    {savingRating ? (
+                      <ActivityIndicator size="small" color="#E8D5B8" />
+                    ) : (
+                      <Text style={styles.saveRatingText}>Save rating</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
 
           {/* ── Pills row ── */}
           <View style={styles.pillsRow}>
@@ -671,5 +762,66 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 7,
     backgroundColor: '#D8C8B0',
+  },
+
+  // Edit break rating
+  editRatingWrapper: {
+    paddingHorizontal: 18,
+    marginBottom: 12,
+  },
+  editRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F2E8D8',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  editRatingLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    color: '#A8845A',
+    flex: 1,
+  },
+  editRatingLink: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    color: '#1B7A87',
+    marginLeft: 8,
+  },
+  editRatingPanel: {
+    backgroundColor: '#F2E8D8',
+    borderTopWidth: 0.5,
+    borderTopColor: '#D8C8B0',
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  editDotsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  editDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  saveRatingBtn: {
+    backgroundColor: '#1B7A87',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  saveRatingText: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 11,
+    color: '#E8D5B8',
   },
 })

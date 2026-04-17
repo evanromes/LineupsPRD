@@ -26,8 +26,9 @@ interface BreakItem {
   lng: number
   type: string | null
   direction: string | null
-  userRating: number | null   // 1–5
-  approxSessions: number
+  userRating: number | null      // 1–5 break rating
+  sessionCount: number           // actual sessions logged
+  avgSessionRating: number | null // avg 1–10, only set when sessionCount >= 3
   isFavorite: boolean
   isWishlisted: boolean
   isVisited: boolean
@@ -114,15 +115,29 @@ function BreakCard({ item, rank }: { item: BreakItem; rank: number }) {
             </View>
           )}
         </View>
+        {item.sessionCount > 0 && (
+          <View style={styles.sessionStatsRow}>
+            <Text style={styles.sessionStatText}>
+              {item.sessionCount} sessions
+            </Text>
+            {item.avgSessionRating != null && (
+              <>
+                <Text style={styles.sessionStatText}> · </Text>
+                <Text style={styles.sessionAvgText}>
+                  {item.avgSessionRating.toFixed(1)} avg
+                </Text>
+              </>
+            )}
+          </View>
+        )}
       </View>
 
       {/* Right side */}
       <View style={styles.cardRight}>
-        {item.userRating != null && <DotRating rating={item.userRating} />}
-        {item.approxSessions > 0 && (
-          <View style={styles.sessionBlock}>
-            <Text style={styles.sessionCount}>{item.approxSessions}</Text>
-            <Text style={styles.sessionLabel}>surfs</Text>
+        {item.userRating != null && (
+          <View style={styles.ratingBlock}>
+            <Text style={styles.breakRatingLabel}>BREAK</Text>
+            <DotRating rating={item.userRating} />
           </View>
         )}
         {item.isFavorite && <View style={styles.favDot} />}
@@ -182,13 +197,19 @@ export default function BreaksScreen() {
         const [{ data: ratings }, { data: wishlist }, { data: sessions }] = await Promise.all([
           supabase.from('break_ratings').select('break_id, rating, is_favorite').eq('user_id', userId),
           supabase.from('wishlist').select('break_id').eq('user_id', userId),
-          supabase.from('sessions').select('break_id').eq('user_id', userId),
+          supabase.from('sessions').select('break_id, rating').eq('user_id', userId),
         ])
 
-        // Build session count per break
+        // Build session count + sum of ratings per break
         const sessionCounts = new Map<string, number>()
+        const sessionRatingSum = new Map<string, number>()
+        const sessionRatingCount = new Map<string, number>()
         for (const s of sessions ?? []) {
           sessionCounts.set(s.break_id, (sessionCounts.get(s.break_id) ?? 0) + 1)
+          if (s.rating != null && s.rating > 0) {
+            sessionRatingSum.set(s.break_id, (sessionRatingSum.get(s.break_id) ?? 0) + s.rating)
+            sessionRatingCount.set(s.break_id, (sessionRatingCount.get(s.break_id) ?? 0) + 1)
+          }
         }
 
         for (const r of ratings ?? []) {
@@ -207,10 +228,19 @@ export default function BreaksScreen() {
         }
 
         for (const w of wishlist ?? []) wishlistSet.add(w.break_id)
+
+        // Store avg rating data on ratingMap entries
+        for (const [breakId, entry] of ratingMap.entries()) {
+          const count = sessionCounts.get(breakId) ?? 0
+          const rCount = sessionRatingCount.get(breakId) ?? 0
+          const rSum = sessionRatingSum.get(breakId) ?? 0
+          ;(entry as any).avgSessionRating =
+            count >= 3 && rCount > 0 ? rSum / rCount : null
+        }
       }
 
       const items: BreakItem[] = breaks.map(b => {
-        const rData = ratingMap.get(b.id)
+        const rData = ratingMap.get(b.id) as any
         return {
           id: b.id,
           name: b.name,
@@ -219,7 +249,8 @@ export default function BreaksScreen() {
           type: b.type,
           direction: b.direction,
           userRating: rData?.rating ?? null,
-          approxSessions: rData?.sessions ?? 0,
+          sessionCount: rData?.sessions ?? 0,
+          avgSessionRating: rData?.avgSessionRating ?? null,
           isFavorite: rData?.isFavorite ?? false,
           isWishlisted: wishlistSet.has(b.id),
           isVisited: ratingMap.has(b.id),
@@ -256,12 +287,12 @@ export default function BreaksScreen() {
       groups.set(b.region, list)
     }
 
-    // 4. Sort within each group: rating desc, then sessions desc, then name
+    // 4. Sort within each group: rating desc (null → bottom), then sessionCount desc, then name
     const sortFn = (a: BreakItem, b: BreakItem) => {
       const rA = a.userRating ?? -1
       const rB = b.userRating ?? -1
       if (rB !== rA) return rB - rA
-      if (b.approxSessions !== a.approxSessions) return b.approxSessions - a.approxSessions
+      if (b.sessionCount !== a.sessionCount) return b.sessionCount - a.sessionCount
       return a.name.localeCompare(b.name)
     }
 
@@ -570,22 +601,36 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C5A882',
   },
-  sessionBlock: {
-    alignItems: 'flex-end',
+  // Session stats row (below pills in card body)
+  sessionStatsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
   },
-  sessionCount: {
-    fontFamily: 'Georgia',
-    fontWeight: '700',
-    fontSize: 13,
-    color: '#2A1A08',
-  },
-  sessionLabel: {
+  sessionStatText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 8,
     color: '#A8845A',
-    letterSpacing: 0.3,
-    marginTop: -1,
   },
+  sessionAvgText: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 8,
+    color: '#1B7A87',
+  },
+
+  // Break rating block (right side)
+  ratingBlock: {
+    alignItems: 'flex-end',
+    gap: 3,
+  },
+  breakRatingLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 7,
+    color: '#A8845A',
+    letterSpacing: 1,
+  },
+
   favDot: {
     width: 7,
     height: 7,
