@@ -1,17 +1,20 @@
 import { useEffect, useRef, useState } from 'react'
 import {
-  Alert,
   Animated,
+  KeyboardAvoidingView,
+  PanResponder,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native'
 import { Marker, Region } from 'react-native-maps'
 import ClusteredMapView from 'react-native-map-clustering'
-import Svg, { Path } from 'react-native-svg'
+import Svg, { Circle, Path } from 'react-native-svg'
 import { Ionicons } from '@expo/vector-icons'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
@@ -36,8 +39,13 @@ interface BreakWithStatus extends Break {
 
 interface CalloutStats {
   sessions: number
-  breakRating: number | null   // 1–5
-  avgSessionRating: number | null  // 1–10, only set when sessions >= 3
+  breakRating: number | null
+  avgSessionRating: number | null
+}
+
+interface DroppedCoord {
+  latitude: number
+  longitude: number
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -80,13 +88,25 @@ const DEFAULT_REGION: Region = {
   longitudeDelta: 80,
 }
 
+const BREAK_TYPES: { label: string; value: string }[] = [
+  { label: 'Beach', value: 'beach' },
+  { label: 'Point', value: 'point' },
+  { label: 'Reef',  value: 'reef' },
+  { label: 'River', value: 'river' },
+]
+const WAVE_DIRECTIONS: { label: string; value: string }[] = [
+  { label: 'Left',     value: 'left' },
+  { label: 'Right',    value: 'right' },
+  { label: 'A-frame',  value: 'a-frame' },
+  { label: 'Variable', value: 'variable' },
+]
+
 // ─── Pin Marker ───────────────────────────────────────────────────────────────
 
 function PinMarker({ status }: { status: PinStatus }) {
   const { fill, stroke, strokeWidth, strokeDash, wrapperOpacity } = PIN_CONFIG[status]
   const isFavorite = status === 'favorite'
   const size = isFavorite ? 26 : 22
-  // Wave SVG sized to fit inside the circle with ~4px padding each side
   const svgW = size - 8
   const svgH = Math.round((size - 8) * 0.57)
 
@@ -121,6 +141,29 @@ function PinMarker({ status }: { status: PinStatus }) {
   )
 }
 
+// ─── Dropped Pin Marker ───────────────────────────────────────────────────────
+
+function DroppedPinMarker({ pulseAnim }: { pulseAnim: Animated.Value }) {
+  const scale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.15] })
+  return (
+    <Animated.View style={[styles.pinWrapper, { transform: [{ scale }] }]}>
+      <Svg width={28} height={28} viewBox="0 0 28 28">
+        <Circle
+          cx={14}
+          cy={14}
+          r={10}
+          fill="#0B2230"
+          stroke="#3CC4C4"
+          strokeWidth={2}
+          strokeDasharray="3 2"
+        />
+      </Svg>
+      <View style={[styles.pinTailLine, { backgroundColor: '#3CC4C4' }]} />
+      <View style={[styles.pinTailDot, { backgroundColor: '#3CC4C4' }]} />
+    </Animated.View>
+  )
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MapScreen() {
@@ -129,9 +172,36 @@ export default function MapScreen() {
   const [selectedBreak, setSelectedBreak] = useState<BreakWithStatus | null>(null)
   const [calloutStats, setCalloutStats] = useState<CalloutStats | null>(null)
 
-  const slideAnim = useRef(new Animated.Value(320)).current
+  // Pin drop state
+  const [pinDropMode, setPinDropMode] = useState(false)
+  const [droppedCoord, setDroppedCoord] = useState<DroppedCoord | null>(null)
+  const [showPinForm, setShowPinForm] = useState(false)
+  const [pinName, setPinName] = useState('')
+  const [pinType, setPinType] = useState<string | null>(null)
+  const [pinDirection, setPinDirection] = useState<string | null>(null)
+  const [nameError, setNameError] = useState(false)
+  const [savingPin, setSavingPin] = useState(false)
 
-  // ─── Data fetching ──────────────────────────────────────────────────────────
+  const slideAnim = useRef(new Animated.Value(320)).current
+  const formSlideAnim = useRef(new Animated.Value(500)).current
+  const pulseAnim = useRef(new Animated.Value(0)).current
+
+  // exitRef pattern so PanResponder always calls the latest closure
+  const exitRef = useRef<() => void>(() => {})
+
+  const formPanResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 10,
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80) exitRef.current()
+      },
+    })
+  ).current
+
+  // Always keep exitRef pointing at the latest exitPinDropMode
+  exitRef.current = exitPinDropMode
+
+  // ─── Data fetching ────────────────────────────────────────────────────────
 
   useEffect(() => {
     console.log('[MapScreen] mounted')
@@ -218,9 +288,10 @@ export default function MapScreen() {
     })
   }
 
-  // ─── Pin tap ────────────────────────────────────────────────────────────────
+  // ─── Pin tap ──────────────────────────────────────────────────────────────
 
   function handlePinPress(b: BreakWithStatus) {
+    if (pinDropMode) return
     setSelectedBreak(b)
     setCalloutStats(null)
     fetchCalloutStats(b.id)
@@ -242,7 +313,103 @@ export default function MapScreen() {
     })
   }
 
-  // ─── Render ─────────────────────────────────────────────────────────────────
+  // ─── Pin drop ─────────────────────────────────────────────────────────────
+
+  function enterPinDropMode() {
+    if (selectedBreak) dismissCallout()
+    setPinDropMode(true)
+  }
+
+  function exitPinDropMode() {
+    setPinDropMode(false)
+    setDroppedCoord(null)
+    setPinName('')
+    setPinType(null)
+    setPinDirection(null)
+    setNameError(false)
+    setSavingPin(false)
+    pulseAnim.stopAnimation()
+    pulseAnim.setValue(0)
+    Animated.timing(formSlideAnim, { toValue: 500, duration: 220, useNativeDriver: true }).start(() => {
+      setShowPinForm(false)
+    })
+  }
+
+  function startPulse() {
+    pulseAnim.setValue(0)
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    ).start()
+  }
+
+  function handleMapPress(e: any) {
+    if (pinDropMode) {
+      const coord: DroppedCoord = e.nativeEvent.coordinate
+      setDroppedCoord(coord)
+      if (!showPinForm) {
+        setShowPinForm(true)
+        Animated.spring(formSlideAnim, { toValue: 0, useNativeDriver: true, bounciness: 3 }).start()
+        startPulse()
+      }
+    } else if (selectedBreak) {
+      dismissCallout()
+    }
+  }
+
+  function handleAdjustCoord() {
+    Animated.timing(formSlideAnim, { toValue: 500, duration: 220, useNativeDriver: true }).start(() => {
+      setShowPinForm(false)
+    })
+  }
+
+  async function handleSavePin(andLogSession: boolean) {
+    if (!pinName.trim()) {
+      setNameError(true)
+      return
+    }
+    setSavingPin(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const userId = session?.user?.id
+      if (!userId || !droppedCoord) return
+
+      const { data, error } = await supabase
+        .from('breaks')
+        .insert({
+          name: pinName.trim(),
+          lat: droppedCoord.latitude,
+          lng: droppedCoord.longitude,
+          type: pinType,
+          direction: pinDirection,
+          is_custom: true,
+          created_by: userId,
+        })
+        .select()
+        .single()
+
+      if (error) {
+        console.warn('[handleSavePin] Supabase error:', JSON.stringify(error))
+        return
+      }
+
+      const newBreak: BreakWithStatus = { ...data, status: 'custom' }
+      setBreaks(prev => [...prev, newBreak])
+      exitPinDropMode()
+
+      if (andLogSession) {
+        router.push({ pathname: '/log-session', params: { break_id: data.id, break_name: data.name } })
+      }
+    } catch (e) {
+      console.warn('[handleSavePin] unexpected error:', e)
+    } finally {
+      setSavingPin(false)
+    }
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
     <View style={styles.container}>
@@ -259,7 +426,7 @@ export default function MapScreen() {
         showsScale={false}
         showsPointsOfInterest={false}
         showsBuildings={false}
-        onPress={selectedBreak ? dismissCallout : undefined}
+        onPress={handleMapPress}
         clusteringEnabled
         radius={40}
         maxZoom={14}
@@ -298,6 +465,16 @@ export default function MapScreen() {
             </Marker>
           )
         })}
+
+        {droppedCoord && (
+          <Marker
+            coordinate={{ latitude: droppedCoord.latitude, longitude: droppedCoord.longitude }}
+            tracksViewChanges
+            anchor={{ x: 0.5, y: 1 }}
+          >
+            <DroppedPinMarker pulseAnim={pulseAnim} />
+          </Marker>
+        )}
       </ClusteredMapView>
 
       {/* Search bar */}
@@ -311,6 +488,17 @@ export default function MapScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Hint banner — shown during pin drop mode before form opens */}
+      {pinDropMode && !showPinForm && (
+        <View style={styles.hintBanner}>
+          <Ionicons name="location-outline" size={14} color="#3CC4C4" style={{ marginRight: 6 }} />
+          <Text style={styles.hintText}>Tap anywhere on the map to drop your pin</Text>
+          <TouchableOpacity onPress={exitPinDropMode} style={styles.hintCancel}>
+            <Text style={styles.hintCancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Legend */}
       <View style={styles.legend}>
         {([
@@ -323,15 +511,23 @@ export default function MapScreen() {
             <Text style={styles.legendText}>{label}</Text>
           </View>
         ))}
+        <View style={styles.legendRow}>
+          <View style={[styles.legendDot, styles.legendDotUnvisited]} />
+          <Text style={styles.legendText}>Unvisited</Text>
+        </View>
       </View>
 
       {/* FAB */}
       <TouchableOpacity
-        style={styles.fab}
-        onPress={() => Alert.alert('Coming soon', 'Custom pin drop coming soon')}
+        style={[styles.fab, pinDropMode && styles.fabActive]}
+        onPress={pinDropMode ? exitPinDropMode : enterPinDropMode}
         activeOpacity={0.8}
       >
-        <Ionicons name="location-outline" size={20} color="#E8D5B8" />
+        <Ionicons
+          name={pinDropMode ? 'close' : 'location-outline'}
+          size={20}
+          color="#E8D5B8"
+        />
       </TouchableOpacity>
 
       {/* Callout card */}
@@ -371,7 +567,6 @@ export default function MapScreen() {
 
           {/* Stats */}
           <View style={styles.statsRow}>
-            {/* Sessions */}
             <View style={styles.statTile}>
               <Text style={styles.statLabel}>SESSIONS</Text>
               <Text style={styles.statValue}>
@@ -379,7 +574,6 @@ export default function MapScreen() {
               </Text>
             </View>
 
-            {/* Break rating dots */}
             <View style={styles.statTile}>
               <Text style={styles.statLabel}>BREAK</Text>
               <View style={styles.statDotsRow}>
@@ -397,7 +591,6 @@ export default function MapScreen() {
               </View>
             </View>
 
-            {/* Avg session rating */}
             <View style={styles.statTile}>
               <Text style={styles.statLabel}>AVG SESSION</Text>
               <Text style={[
@@ -432,6 +625,119 @@ export default function MapScreen() {
               <Text style={styles.ctaSecondaryText}>View break</Text>
             </TouchableOpacity>
           </View>
+        </Animated.View>
+      )}
+
+      {/* Pin form bottom sheet */}
+      {showPinForm && (
+        <Animated.View
+          style={[styles.formSheet, { transform: [{ translateY: formSlideAnim }] }]}
+        >
+          {/* Drag handle */}
+          <View {...formPanResponder.panHandlers}>
+            <View style={styles.formHandle} />
+          </View>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={0}
+          >
+            <ScrollView
+              style={styles.formScroll}
+              contentContainerStyle={styles.formScrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {/* Break Name */}
+              <Text style={styles.formLabel}>Break Name</Text>
+              <TextInput
+                style={[styles.formInput, nameError && styles.formInputError]}
+                placeholder="e.g. Sunset Beach"
+                placeholderTextColor="#B8A898"
+                value={pinName}
+                onChangeText={t => { setPinName(t); if (t.trim()) setNameError(false) }}
+                autoCorrect={false}
+              />
+              {nameError && (
+                <Text style={styles.formErrorText}>Please name this break</Text>
+              )}
+
+              {/* Break Type */}
+              <Text style={[styles.formLabel, { marginTop: 16 }]}>Break Type</Text>
+              <View style={styles.chipRow}>
+                {BREAK_TYPES.map(({ label, value }) => {
+                  const selected = pinType === value
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.chip, selected && styles.chipTypeSelected]}
+                      onPress={() => setPinType(selected ? null : value)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTypeSelectedText]}>{label}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              {/* Wave Direction */}
+              <Text style={[styles.formLabel, { marginTop: 16 }]}>Wave Direction</Text>
+              <View style={styles.chipRow}>
+                {WAVE_DIRECTIONS.map(({ label, value }) => {
+                  const selected = pinDirection === value
+                  return (
+                    <TouchableOpacity
+                      key={value}
+                      style={[styles.chip, selected && styles.chipDirSelected]}
+                      onPress={() => setPinDirection(selected ? null : value)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipDirSelectedText]}>{label}</Text>
+                    </TouchableOpacity>
+                  )
+                })}
+              </View>
+
+              {/* Coordinates */}
+              {droppedCoord && (
+                <View style={styles.coordRow}>
+                  <View style={styles.coordBlock}>
+                    <Text style={styles.coordLabel}>LAT</Text>
+                    <Text style={styles.coordValue}>{droppedCoord.latitude.toFixed(5)}</Text>
+                  </View>
+                  <View style={styles.coordBlock}>
+                    <Text style={styles.coordLabel}>LNG</Text>
+                    <Text style={styles.coordValue}>{droppedCoord.longitude.toFixed(5)}</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleAdjustCoord} style={styles.coordAdjust}>
+                    <Text style={styles.coordAdjustText}>Tap map to adjust</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* CTAs */}
+              <View style={styles.formCtaRow}>
+                <TouchableOpacity
+                  style={[styles.formCtaPrimary, savingPin && { opacity: 0.6 }]}
+                  onPress={() => handleSavePin(true)}
+                  disabled={savingPin}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.formCtaPrimaryText}>
+                    {savingPin ? 'Saving…' : 'Save & log session'}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.formCtaSecondary, savingPin && { opacity: 0.6 }]}
+                  onPress={() => handleSavePin(false)}
+                  disabled={savingPin}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.formCtaSecondaryText}>Save pin only</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </Animated.View>
       )}
     </View>
@@ -518,6 +824,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+  // Hint banner
+  hintBanner: {
+    position: 'absolute',
+    top: 104,
+    left: 14,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0F2D3A',
+    borderWidth: 1,
+    borderColor: '#3CC4C4',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  hintText: {
+    flex: 1,
+    color: '#E8D5B8',
+    fontSize: 12,
+    fontFamily: 'Helvetica Neue',
+    letterSpacing: 0.3,
+  },
+  hintCancel: {
+    paddingLeft: 10,
+  },
+  hintCancelText: {
+    color: '#3CC4C4',
+    fontSize: 12,
+    fontFamily: 'Helvetica Neue',
+    letterSpacing: 0.3,
+  },
+
   // Legend
   legend: {
     position: 'absolute',
@@ -541,6 +879,11 @@ const styles = StyleSheet.create({
     height: 9,
     borderRadius: 4.5,
   },
+  legendDotUnvisited: {
+    backgroundColor: '#4A2D0E',
+    borderWidth: 1,
+    borderColor: '#C5A882',
+  },
   legendText: {
     color: '#7AABB8',
     fontSize: 10,
@@ -561,6 +904,10 @@ const styles = StyleSheet.create({
     borderColor: '#3CC4C4',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  fabActive: {
+    backgroundColor: '#7A4E2A',
+    borderColor: '#C5A882',
   },
 
   // Callout
@@ -700,7 +1047,7 @@ const styles = StyleSheet.create({
     borderColor: '#C5A882',
   },
 
-  // CTAs
+  // CTAs (callout)
   ctaRow: {
     flexDirection: 'row',
     gap: 8,
@@ -732,6 +1079,169 @@ const styles = StyleSheet.create({
   ctaSecondaryText: {
     color: '#3CC4C4',
     fontSize: 11,
+    fontFamily: 'Helvetica Neue',
+    letterSpacing: 0.5,
+  },
+
+  // Form sheet
+  formSheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: '80%',
+    backgroundColor: '#FEFAF5',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+  formHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#C8B8A2',
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  formScroll: {
+    flexGrow: 0,
+  },
+  formScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 36,
+  },
+  formLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#8A7060',
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  formInput: {
+    backgroundColor: '#F2E8D8',
+    borderWidth: 1,
+    borderColor: '#D4C0A8',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    fontFamily: 'Georgia',
+    fontSize: 15,
+    color: '#2A1A08',
+  },
+  formInputError: {
+    borderColor: '#E24B4A',
+  },
+  formErrorText: {
+    color: '#E24B4A',
+    fontSize: 11,
+    fontFamily: 'Helvetica Neue',
+    marginTop: 5,
+    letterSpacing: 0.3,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#EDE0CC',
+    borderWidth: 0.5,
+    borderColor: '#C8B8A2',
+  },
+  chipText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#6A5040',
+    letterSpacing: 0.3,
+  },
+  chipTypeSelected: {
+    backgroundColor: '#EEEDFE',
+    borderColor: '#534AB7',
+    borderWidth: 0.5,
+  },
+  chipTypeSelectedText: {
+    color: '#534AB7',
+  },
+  chipDirSelected: {
+    backgroundColor: '#E1F5EE',
+    borderColor: '#0F6E56',
+    borderWidth: 0.5,
+  },
+  chipDirSelectedText: {
+    color: '#0F6E56',
+  },
+  coordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 18,
+    gap: 10,
+  },
+  coordBlock: {
+    flex: 1,
+    backgroundColor: '#F2E8D8',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  coordLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 9,
+    color: '#8A7060',
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  coordValue: {
+    fontFamily: 'Georgia',
+    fontSize: 13,
+    color: '#2A1A08',
+  },
+  coordAdjust: {
+    paddingHorizontal: 2,
+  },
+  coordAdjustText: {
+    color: '#1B7A87',
+    fontSize: 11,
+    fontFamily: 'Helvetica Neue',
+    letterSpacing: 0.3,
+    textDecorationLine: 'underline',
+  },
+  formCtaRow: {
+    gap: 8,
+    marginTop: 22,
+  },
+  formCtaPrimary: {
+    backgroundColor: '#1B7A87',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  formCtaPrimaryText: {
+    color: '#E8D5B8',
+    fontSize: 13,
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    letterSpacing: 0.5,
+  },
+  formCtaSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#C8B8A2',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  formCtaSecondaryText: {
+    color: '#1B7A87',
+    fontSize: 13,
     fontFamily: 'Helvetica Neue',
     letterSpacing: 0.5,
   },
