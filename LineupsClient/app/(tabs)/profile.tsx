@@ -553,6 +553,18 @@ export default function ProfileScreen() {
               : <WishlistTab items={wishlist} />
             }
           </View>
+
+          {/* ── Sign out (temporary, for testing) ── */}
+          <TouchableOpacity
+            style={styles.signOutButton}
+            activeOpacity={0.7}
+            onPress={async () => {
+              await supabase.auth.signOut()
+              router.replace('/(auth)/login')
+            }}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
         </ScrollView>
       )}
     </View>
@@ -783,6 +795,23 @@ const styles = StyleSheet.create({
   // Tab content wrapper
   tabContent: {
     paddingBottom: 8,
+  },
+  signOutButton: {
+    marginHorizontal: 18,
+    marginTop: 24,
+    marginBottom: 24,
+    borderWidth: 0.5,
+    borderColor: '#E24B4A',
+    borderRadius: 10,
+    paddingVertical: 12,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+  },
+  signOutText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 13,
+    color: '#E24B4A',
+    textAlign: 'center',
   },
 
   // Empty tab state

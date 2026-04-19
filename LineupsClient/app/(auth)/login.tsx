@@ -20,20 +20,30 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null)
 
   async function handleLogin() {
-    if (!email || !password) {
-      setError('Please enter your email and password.')
-      return
-    }
-    setLoading(true)
-    setError(null)
+    console.log('[Login] button tapped')
+    try {
+      if (!email || !password) {
+        setError('Please enter your email and password.')
+        return
+      }
+      setLoading(true)
+      setError(null)
 
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+      console.log('[Login] attempting with email:', email)
 
-    if (authError) {
-      setError(authError.message)
+      const { data, error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+      console.log('[Login] response:', JSON.stringify(data), JSON.stringify(authError))
+
+      if (authError) {
+        setError(authError.message)
+        setLoading(false)
+      }
+      // On success, _layout's onAuthStateChange handles routing
+    } catch (e) {
+      console.log('[Login] caught error:', e)
+      setLoading(false)
     }
-    // successful login triggers onAuthStateChange in index.tsx → redirect
-    setLoading(false)
   }
 
   return (

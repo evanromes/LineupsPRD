@@ -38,13 +38,14 @@ export default function Signup() {
     setLoading(true)
     setError(null)
 
-    const { error: authError } = await supabase.auth.signUp({ email, password })
+    const { data, error: authError } = await supabase.auth.signUp({ email, password })
 
     if (authError) {
       setError(authError.message)
-    } else {
-      setSuccess(true)
+    } else if (!data.session) {
+      setSuccess(true) // email confirmation required; _layout routes when confirmed
     }
+    // if data.session exists, _layout's onAuthStateChange routes to onboarding
     setLoading(false)
   }
 
@@ -93,7 +94,7 @@ export default function Signup() {
           <TextInput
             style={styles.input}
             placeholder="Email"
-            placeholderTextColor="#4A7A87"
+            placeholderTextColor="#C5A882"
             value={email}
             onChangeText={setEmail}
             keyboardType="email-address"
@@ -103,7 +104,7 @@ export default function Signup() {
           <TextInput
             style={styles.input}
             placeholder="Password"
-            placeholderTextColor="#4A7A87"
+            placeholderTextColor="#C5A882"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
@@ -112,7 +113,7 @@ export default function Signup() {
           <TextInput
             style={styles.input}
             placeholder="Confirm Password"
-            placeholderTextColor="#4A7A87"
+            placeholderTextColor="#C5A882"
             value={confirmPassword}
             onChangeText={setConfirmPassword}
             secureTextEntry
@@ -204,17 +205,18 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
-    gap: 12,
+    gap: 8,
   },
   input: {
-    backgroundColor: '#0F2D3A',
-    borderWidth: 1,
-    borderColor: '#1B5A6A',
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    backgroundColor: 'rgba(42, 26, 8, 0.35)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(197, 168, 130, 0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    height: 46,
     color: '#E8D5B8',
-    fontSize: 15,
+    fontSize: 12,
     fontFamily: 'Georgia',
   },
   error: {
