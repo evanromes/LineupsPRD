@@ -1,5 +1,5 @@
 import { View, Text, TouchableOpacity, StyleSheet, Dimensions } from 'react-native'
-import Svg, { Circle, Path } from 'react-native-svg'
+import Svg, { Circle, Path, Text as SvgText } from 'react-native-svg'
 import { router } from 'expo-router'
 
 const { width: W, height: H } = Dimensions.get('window')
@@ -89,18 +89,44 @@ export default function Splash() {
 
       {/* Centered content */}
       <View style={styles.content}>
-        {/* Logo tile */}
-        <View style={styles.outerTile}>
-          <View style={styles.innerBlock}>
-            <View style={styles.waveLine1} />
-            <View style={styles.waveLine2} />
-            <View style={styles.waveLine3} />
-          </View>
-        </View>
-
-        {/* Wordmark */}
-        <Text style={styles.wordmark}>Lineups</Text>
-        <Text style={styles.submark}>SURF JOURNAL</Text>
+        {/* Wordmark + waves */}
+        <Svg width={320} height={145} viewBox="20 140 360 165">
+          <SvgText
+            x="200"
+            y="195"
+            fontFamily="Georgia, serif"
+            fontSize="74"
+            fontWeight="700"
+            fill="#E8D5B8"
+            textAnchor="middle"
+            letterSpacing="2"
+          >
+            Lineups
+          </SvgText>
+          <Path
+            d="M60 240 Q130 224,200 240 Q270 256,340 240"
+            fill="none"
+            stroke="#3CC4C4"
+            strokeWidth="3"
+            strokeLinecap="round"
+          />
+          <Path
+            d="M60 262 Q130 246,200 262 Q270 278,340 262"
+            fill="none"
+            stroke="#3CC4C4"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            opacity="0.6"
+          />
+          <Path
+            d="M60 282 Q130 268,200 282 Q270 296,340 282"
+            fill="none"
+            stroke="#3CC4C4"
+            strokeWidth="2"
+            strokeLinecap="round"
+            opacity="0.3"
+          />
+        </Svg>
 
         {/* Tagline */}
         <Text style={styles.tagline}>every break, remembered</Text>
@@ -145,61 +171,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: H * 0.20,
-  },
-  outerTile: {
-    width: 110,
-    height: 110,
-    borderRadius: 26,
-    backgroundColor: '#1B7A87',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  innerBlock: {
-    width: 76,
-    height: 76,
-    borderRadius: 16,
-    backgroundColor: '#0F5A65',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 9,
-  },
-  waveLine1: {
-    width: 46,
-    height: 3.5,
-    borderRadius: 2,
-    backgroundColor: '#E8D5B8',
-    opacity: 1.0,
-  },
-  waveLine2: {
-    width: 46,
-    height: 3,
-    borderRadius: 2,
-    backgroundColor: '#E8D5B8',
-    opacity: 0.6,
-  },
-  waveLine3: {
-    width: 46,
-    height: 2.5,
-    borderRadius: 2,
-    backgroundColor: '#E8D5B8',
-    opacity: 0.3,
-  },
-  wordmark: {
-    fontFamily: 'Georgia',
-    fontWeight: 'bold',
-    fontSize: 52,
-    color: '#E8D5B8',
-    letterSpacing: 4,
-    marginTop: 28,
-  },
-  submark: {
-    fontFamily: 'Helvetica Neue',
-    fontWeight: '300',
-    fontSize: 14,
-    color: '#4A7A87',
-    letterSpacing: 6,
-    marginTop: 4,
   },
   tagline: {
     fontFamily: 'Georgia',

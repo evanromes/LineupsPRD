@@ -12,6 +12,7 @@ import {
 } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+import Svg, { Text as SvgText, Path } from 'react-native-svg'
 
 export default function Login() {
   const [email, setEmail] = useState('')
@@ -57,9 +58,43 @@ export default function Login() {
       >
         {/* Wordmark */}
         <View style={styles.header}>
-          <Text style={styles.wordmark}>LINEUPS</Text>
-          <Text style={styles.subtext}>SURF JOURNAL</Text>
-          <Text style={styles.tagline}>every break, remembered</Text>
+          <Svg width={300} height={155} viewBox="20 120 360 185">
+            <SvgText
+              x="200"
+              y="195"
+              fontFamily="Georgia, serif"
+              fontSize="71"
+              fontWeight="700"
+              fill="#E8D5B8"
+              textAnchor="middle"
+              letterSpacing="2"
+            >
+              Lineups
+            </SvgText>
+            <Path
+              d="M60 240 Q130 224,200 240 Q270 256,340 240"
+              fill="none"
+              stroke="#3CC4C4"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+            />
+            <Path
+              d="M60 262 Q130 246,200 262 Q270 278,340 262"
+              fill="none"
+              stroke="#3CC4C4"
+              strokeWidth="2.9"
+              strokeLinecap="round"
+              opacity="0.6"
+            />
+            <Path
+              d="M60 282 Q130 268,200 282 Q270 296,340 282"
+              fill="none"
+              stroke="#3CC4C4"
+              strokeWidth="2.3"
+              strokeLinecap="round"
+              opacity="0.3"
+            />
+          </Svg>
         </View>
 
         {/* Form */}
@@ -148,28 +183,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     marginBottom: 48,
-  },
-  wordmark: {
-    fontFamily: 'Georgia',
-    fontWeight: 'bold',
-    fontSize: 36,
-    color: '#E8D5B8',
-    letterSpacing: 4,
-  },
-  subtext: {
-    fontFamily: 'Helvetica Neue',
-    fontWeight: '300',
-    fontSize: 11,
-    color: '#4A7A87',
-    letterSpacing: 6,
-    marginTop: 4,
-  },
-  tagline: {
-    fontFamily: 'Georgia',
-    fontStyle: 'italic',
-    fontSize: 13,
-    color: '#3A5A65',
-    marginTop: 12,
   },
   form: {
     width: '100%',

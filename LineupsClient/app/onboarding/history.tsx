@@ -10,12 +10,21 @@ import {
   Animated,
   PanResponder,
   Dimensions,
-  FlatList,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
+
+interface BreakResult {
+  id: string
+  name: string
+  lat: number | null
+  lng: number | null
+  type: string | null
+  direction: string | null
+}
 
 interface RatedBreak {
   breakId: string
@@ -24,6 +33,94 @@ interface RatedBreak {
   isFavorite: boolean
 }
 
+function getLocationLabel(lat: number | null, lng: number | null): string | null {
+  if (lat === null || lng === null) return null
+  if (lat >= 32 && lat < 35 && lng >= -118 && lng <= -117) return 'San Diego, CA'
+  if (lat >= 33 && lat < 34 && lng >= -119 && lng <= -117) return 'Los Angeles, CA'
+  if (lat >= 34 && lat < 35 && lng >= -121 && lng <= -119) return 'Santa Barbara, CA'
+  if (lat >= 36 && lat < 37 && lng >= -122 && lng <= -121) return 'Santa Cruz, CA'
+  if (lat >= 21 && lat < 22 && lng >= -158 && lng <= -157) return 'Oahu, HI'
+  if (lat >= 20 && lat < 21 && lng >= -157 && lng <= -155) return 'Maui, HI'
+  if (lat >= -18 && lat < -17 && lng >= 177 && lng <= 178) return 'Fiji'
+  if (lat >= 38 && lat < 39 && lng >= -9 && lng <= -8) return 'Portugal'
+  if (lat >= 17 && lat < 19 && lng >= -104 && lng <= -101) return 'Mexico'
+  return `${lat.toFixed(2)}, ${lng.toFixed(2)}`
+}
+
+// ── Progress dots ──────────────────────────────────────────
+function ProgressDots({ total, current }: { total: number; current: number }) {
+  return (
+    <View style={dotStyles.row}>
+      {Array.from({ length: total }).map((_, i) => {
+        const isActive = i + 1 === current
+        const isDone = i + 1 < current
+        return (
+          <View
+            key={i}
+            style={[
+              dotStyles.dot,
+              isActive ? dotStyles.dotActive : isDone ? dotStyles.dotDone : null,
+            ]}
+          />
+        )
+      })}
+    </View>
+  )
+}
+
+const dotStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    marginBottom: 20,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#1B5A6A',
+  },
+  dotActive: {
+    width: 23,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#E8D5B8',
+  },
+  dotDone: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#3CC4C4',
+  },
+})
+
+// ── Rating dots (inline on added rows) ────────────────────
+function InlineDots({ value }: { value: number }) {
+  return (
+    <View style={inlineStyles.row}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <View key={i} style={[inlineStyles.dot, i <= value && inlineStyles.dotFilled]} />
+      ))}
+    </View>
+  )
+}
+
+const inlineStyles = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 3, marginTop: 5 },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    borderWidth: 0.5,
+    borderColor: 'rgba(74, 122, 135, 0.4)',
+    backgroundColor: 'transparent',
+  },
+  dotFilled: { backgroundColor: '#3CC4C4', borderColor: '#3CC4C4' },
+})
+
+// ── Bottom-sheet dot rating ────────────────────────────────
 function DotRating({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
     <View style={ratingStyles.row}>
@@ -44,175 +141,218 @@ const ratingStyles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 1.5,
-    borderColor: '#C5A882',
+    borderColor: '#4A7A87',
     backgroundColor: 'transparent',
   },
-  dotFilled: {
-    backgroundColor: '#1B7A87',
-    borderColor: '#1B7A87',
-  },
+  dotFilled: { backgroundColor: '#1B7A87', borderColor: '#1B7A87' },
 })
 
+// ── Main screen ────────────────────────────────────────────
 export default function OnboardingHistory() {
   const [userId, setUserId] = useState<string | null>(null)
   const [searchText, setSearchText] = useState('')
-  const [ratedBreaks, setRatedBreaks] = useState<RatedBreak[]>([])
+  const [initialBreaks, setInitialBreaks] = useState<BreakResult[]>([])
+  const [searchResults, setSearchResults] = useState<BreakResult[]>([])
+  const [loadingInitial, setLoadingInitial] = useState(true)
+  const [ratedBreaks, setRatedBreaks] = useState<Map<string, RatedBreak>>(new Map())
   const [sheetVisible, setSheetVisible] = useState(false)
-  const [sheetBreakName, setSheetBreakName] = useState('')
+  const [sheetBreak, setSheetBreak] = useState<BreakResult | null>(null)
   const [sheetRating, setSheetRating] = useState(0)
   const [sheetFavorite, setSheetFavorite] = useState(false)
   const [saving, setSaving] = useState(false)
   const sheetY = useRef(new Animated.Value(SCREEN_HEIGHT)).current
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       setUserId(data.user?.id ?? null)
     })
+
+    supabase
+      .from('breaks')
+      .select('id, name, lat, lng, type, direction')
+      .eq('is_custom', false)
+      .order('name', { ascending: true })
+      .limit(20)
+      .then(({ data }) => {
+        setInitialBreaks(data ?? [])
+        setLoadingInitial(false)
+      })
   }, [])
 
-  function openSheet() {
-    if (!searchText.trim()) return
-    setSheetBreakName(searchText.trim())
-    setSheetRating(0)
-    setSheetFavorite(false)
+  useEffect(() => {
+    if (searchTimer.current) clearTimeout(searchTimer.current)
+    if (!searchText.trim()) {
+      setSearchResults([])
+      return
+    }
+    searchTimer.current = setTimeout(async () => {
+      const { data } = await supabase
+        .from('breaks')
+        .select('id, name, lat, lng, type, direction')
+        .ilike('name', `%${searchText.trim()}%`)
+        .eq('is_custom', false)
+        .order('name', { ascending: true })
+        .limit(30)
+      setSearchResults(data ?? [])
+    }, 300)
+  }, [searchText])
+
+  function openSheet(breakItem: BreakResult) {
+    const existing = ratedBreaks.get(breakItem.id)
+    setSheetBreak(breakItem)
+    setSheetRating(existing?.rating ?? 0)
+    setSheetFavorite(existing?.isFavorite ?? false)
     setSheetVisible(true)
     Animated.spring(sheetY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 12 }).start()
   }
 
   function closeSheet() {
-    Animated.timing(sheetY, { toValue: SCREEN_HEIGHT, useNativeDriver: true, duration: 260 }).start(() => {
-      setSheetVisible(false)
-    })
+    Animated.timing(sheetY, { toValue: SCREEN_HEIGHT, useNativeDriver: true, duration: 260 }).start(
+      () => setSheetVisible(false)
+    )
   }
 
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: (_, gs) => gs.dy > 8,
-      onPanResponderMove: (_, gs) => {
-        if (gs.dy > 0) sheetY.setValue(gs.dy)
-      },
+      onPanResponderMove: (_, gs) => { if (gs.dy > 0) sheetY.setValue(gs.dy) },
       onPanResponderRelease: (_, gs) => {
-        if (gs.dy > 80) {
-          closeSheet()
-        } else {
-          Animated.spring(sheetY, { toValue: 0, useNativeDriver: true }).start()
-        }
+        if (gs.dy > 80) closeSheet()
+        else Animated.spring(sheetY, { toValue: 0, useNativeDriver: true }).start()
       },
     })
   ).current
 
   async function confirmBreak() {
-    if (!userId || sheetRating === 0) return
+    if (!userId || !sheetBreak || sheetRating === 0) return
     setSaving(true)
 
-    // Upsert break by name
-    const { data: existingBreak } = await supabase
-      .from('breaks')
-      .select('id')
-      .ilike('name', sheetBreakName)
-      .maybeSingle()
-
-    let breakId = existingBreak?.id as string | undefined
-
-    if (!breakId) {
-      const { data: newBreak, error: breakErr } = await supabase
-        .from('breaks')
-        .insert({ name: sheetBreakName })
-        .select('id')
-        .single()
-
-      if (breakErr || !newBreak) {
-        setSaving(false)
-        return
-      }
-      breakId = newBreak.id
-    }
-
     await supabase.from('break_ratings').upsert(
-      { user_id: userId, break_id: breakId, rating: sheetRating, is_favorite: sheetFavorite },
+      { user_id: userId, break_id: sheetBreak.id, rating: sheetRating, is_favorite: sheetFavorite },
       { onConflict: 'user_id,break_id' }
     )
 
-    setRatedBreaks((prev) => [
-      ...prev.filter((b) => b.breakId !== breakId),
-      { breakId: breakId!, name: sheetBreakName, rating: sheetRating, isFavorite: sheetFavorite },
-    ])
+    setRatedBreaks((prev) => {
+      const next = new Map(prev)
+      next.set(sheetBreak.id, { breakId: sheetBreak.id, name: sheetBreak.name, rating: sheetRating, isFavorite: sheetFavorite })
+      return next
+    })
 
     setSaving(false)
-    setSearchText('')
     closeSheet()
   }
 
+  const isAdded = (id: string) => ratedBreaks.has(id)
+
+  const isSearching = searchText.trim().length > 0
+  const displayBreaks = isSearching ? searchResults : initialBreaks
+
   return (
-    <View style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <View style={styles.stepRow}>
-          <Text style={styles.stepText}>3 / 5</Text>
-        </View>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <View style={styles.flex}>
 
-        <Text style={styles.title}>Rate Your Breaks</Text>
-        <Text style={styles.subtitle}>Add breaks you've surfed and rate them</Text>
+        {/* Frozen header */}
+        <View style={styles.frozenHeader}>
+          <ProgressDots total={5} current={3} />
+          <Text style={styles.title}>Log your surf history</Text>
+          <Text style={styles.subtitle}>Add breaks you've already surfed</Text>
 
-        <View style={styles.searchRow}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Break name..."
-            placeholderTextColor="#A89070"
-            value={searchText}
-            onChangeText={setSearchText}
-            autoCorrect={false}
-            returnKeyType="done"
-            onSubmitEditing={openSheet}
-          />
-          <TouchableOpacity
-            style={[styles.addButton, !searchText.trim() && styles.addButtonDisabled]}
-            onPress={openSheet}
-            disabled={!searchText.trim()}
-          >
-            <Text style={styles.addButtonText}>Add</Text>
-          </TouchableOpacity>
-        </View>
-
-        {ratedBreaks.length > 0 && (
-          <View style={styles.ratedList}>
-            {ratedBreaks.map((b) => (
-              <View key={b.breakId} style={styles.ratedCard}>
-                <View style={styles.ratedCardLeft}>
-                  <Text style={styles.ratedName}>{b.name}</Text>
-                  <View style={styles.ratedDots}>
-                    {[1, 2, 3, 4, 5].map((i) => (
-                      <View
-                        key={i}
-                        style={[styles.miniDot, i <= b.rating && styles.miniDotFilled]}
-                      />
-                    ))}
-                    {b.isFavorite && <Text style={styles.favStar}>★</Text>}
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() =>
-                    setRatedBreaks((prev) => prev.filter((x) => x.breakId !== b.breakId))
-                  }
-                >
-                  <Text style={styles.removeText}>✕</Text>
-                </TouchableOpacity>
-              </View>
-            ))}
+          <View style={styles.searchBar}>
+            <Text style={styles.searchIcon}>⌕</Text>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search breaks..."
+              placeholderTextColor="#4A7A87"
+              value={searchText}
+              onChangeText={setSearchText}
+              autoCorrect={false}
+              returnKeyType="search"
+            />
           </View>
-        )}
+        </View>
 
-        <View style={styles.actions}>
-          <TouchableOpacity style={styles.primaryButton} onPress={() => router.replace('/onboarding/friends')}>
-            <Text style={styles.primaryButtonText}>
-              {ratedBreaks.length > 0 ? 'Continue' : 'Continue'}
-            </Text>
+        {/* Scrollable list */}
+        <ScrollView
+          style={styles.flex}
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Results */}
+          {loadingInitial ? (
+            <ActivityIndicator color="#4A7A87" style={styles.loader} />
+          ) : isSearching && searchResults.length === 0 ? (
+            <Text style={styles.emptyText}>No breaks found for that name</Text>
+          ) : (
+            <View style={styles.resultsList}>
+              {displayBreaks.map((b) => {
+                const added = isAdded(b.id)
+                const rated = ratedBreaks.get(b.id)
+                const typeCapped = b.type ? b.type.charAt(0).toUpperCase() + b.type.slice(1) : null
+                const dirCapped = b.direction ? b.direction.charAt(0).toUpperCase() + b.direction.slice(1) : null
+                const locationLabel = getLocationLabel(b.lat, b.lng)
+                return (
+                  <View key={b.id} style={[styles.breakRow, added && styles.breakRowAdded]}>
+                    <View style={styles.breakRowLeft}>
+                      <Text style={styles.breakName}>{b.name}</Text>
+                      {locationLabel && (
+                        <Text style={styles.breakMeta}>{locationLabel}</Text>
+                      )}
+                      {(typeCapped || dirCapped) && (
+                        <View style={styles.pillRow}>
+                          {typeCapped && (
+                            <View style={styles.typePill}>
+                              <Text style={styles.typePillText}>{typeCapped}</Text>
+                            </View>
+                          )}
+                          {dirCapped && (
+                            <View style={styles.dirPill}>
+                              <Text style={styles.dirPillText}>{dirCapped}</Text>
+                            </View>
+                          )}
+                        </View>
+                      )}
+                      {added && rated && <InlineDots value={rated.rating} />}
+                    </View>
+                    <TouchableOpacity
+                      style={added ? styles.addedBtn : styles.addBtn}
+                      onPress={() => openSheet(b)}
+                    >
+                      <Text style={added ? styles.addedBtnText : styles.addBtnText}>
+                        {added ? '✓ Added' : '+ Add'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )
+              })}
+            </View>
+          )}
+        </ScrollView>
+
+        {/* Fixed bottom — never scrolls */}
+        <View style={styles.fixedBottom}>
+          <View style={styles.callout}>
+            <Text style={styles.calloutLine1}>Not seeing a break you've surfed?</Text>
+            <Text style={styles.calloutLine2}>Drop a custom pin on the map after signing in →</Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.continueButton}
+            onPress={() => router.replace('/onboarding/done')}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.skipButton} onPress={() => router.replace('/onboarding/friends')}>
-            <Text style={styles.skipText}>Skip for now</Text>
+          <TouchableOpacity
+            style={styles.skipButton}
+            onPress={() => router.replace('/onboarding/done')}
+          >
+            <Text style={styles.skipText}>Skip — I'll add as I go</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+
+      </View>
 
       {/* Rating bottom sheet */}
       {sheetVisible && (
@@ -220,21 +360,15 @@ export default function OnboardingHistory() {
           <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSheet} />
           <Animated.View style={[styles.sheet, { transform: [{ translateY: sheetY }] }]}>
             <View style={styles.sheetHandle} {...panResponder.panHandlers} />
-
-            <Text style={styles.sheetTitle}>{sheetBreakName}</Text>
-            <Text style={styles.sheetLabel}>Rating</Text>
+            <Text style={styles.sheetTitle}>{sheetBreak?.name}</Text>
+            <Text style={styles.sheetLabel}>RATING</Text>
             <DotRating value={sheetRating} onChange={setSheetRating} />
-
-            <TouchableOpacity
-              style={styles.favRow}
-              onPress={() => setSheetFavorite((f) => !f)}
-            >
+            <TouchableOpacity style={styles.favRow} onPress={() => setSheetFavorite((f) => !f)}>
               <View style={[styles.favCheck, sheetFavorite && styles.favCheckActive]}>
                 {sheetFavorite && <Text style={styles.favCheckMark}>✓</Text>}
               </View>
               <Text style={styles.favLabel}>Mark as favourite</Text>
             </TouchableOpacity>
-
             <TouchableOpacity
               style={[styles.confirmButton, (sheetRating === 0 || saving) && styles.disabled]}
               onPress={confirmBreak}
@@ -249,111 +383,218 @@ export default function OnboardingHistory() {
           </Animated.View>
         </>
       )}
-    </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, backgroundColor: '#F5EDE0' },
-  container: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingTop: 60,
-    paddingBottom: 40,
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0B2230',
   },
-  stepRow: { alignSelf: 'flex-end', marginBottom: 24 },
-  stepText: { fontFamily: 'Helvetica Neue', fontSize: 13, color: '#A89070' },
+  flex: { flex: 1 },
+  frozenHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 52,
+    paddingBottom: 8,
+    backgroundColor: '#0B2230',
+  },
+  scrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 16,
+  },
+
+  // Header
   title: {
     fontFamily: 'Georgia',
     fontWeight: 'bold',
-    fontSize: 38,
-    color: '#2A1A08',
+    fontSize: 31,
+    color: '#E8D5B8',
     textAlign: 'center',
-    marginBottom: 8,
+    lineHeight: 37,
+    marginBottom: 5,
   },
   subtitle: {
     fontFamily: 'Helvetica Neue',
-    fontWeight: '300',
-    fontSize: 18,
-    color: '#8A7055',
+    fontSize: 13,
+    color: '#4A7A87',
     textAlign: 'center',
-    marginBottom: 28,
+    marginBottom: 16,
   },
-  searchRow: { flexDirection: 'row', gap: 10, marginBottom: 20 },
+
+  // Search
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0B2230',
+    borderWidth: 0.5,
+    borderColor: '#E8D5B8',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    marginBottom: 12,
+  },
+  searchIcon: {
+    fontSize: 16,
+    color: '#4A7A87',
+    marginRight: 8,
+  },
   searchInput: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D4BFA0',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: '#2A1A08',
-    fontSize: 15,
-    fontFamily: 'Georgia',
-  },
-  addButton: {
-    backgroundColor: '#1B7A87',
-    borderRadius: 10,
-    paddingHorizontal: 20,
-    justifyContent: 'center',
-  },
-  addButtonDisabled: { opacity: 0.4 },
-  addButtonText: {
-    color: '#E8D5B8',
     fontFamily: 'Helvetica Neue',
-    fontWeight: '600',
-    fontSize: 14,
+    fontSize: 12,
+    color: '#E8D5B8',
+    padding: 0,
   },
-  ratedList: { gap: 10, marginBottom: 24 },
-  ratedCard: {
+
+  // Loading / empty
+  loader: { marginVertical: 24 },
+  emptyText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#4A7A87',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+
+  // Break rows
+  resultsList: { gap: 10, marginBottom: 12 },
+  breakRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(11, 34, 48, 0.6)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(74, 122, 135, 0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    minHeight: 72,
+  },
+  breakRowAdded: {
+    backgroundColor: '#0F4E63',
+    borderColor: '#3CC4C4',
+  },
+  breakRowLeft: { flex: 1, marginRight: 12 },
+  breakName: {
+    fontFamily: 'Georgia',
+    fontWeight: 'bold',
+    fontSize: 15,
+    color: '#E8D5B8',
+  },
+  breakMeta: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#4A7A87',
+    marginTop: 2,
+  },
+  pillRow: { flexDirection: 'row', gap: 4, marginTop: 5 },
+  typePill: {
+    backgroundColor: 'rgba(83, 74, 183, 0.2)',
+    borderRadius: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  typePillText: { fontFamily: 'Helvetica Neue', fontSize: 9, color: '#9B95E8' },
+  dirPill: {
+    backgroundColor: 'rgba(15, 110, 86, 0.2)',
+    borderRadius: 5,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+  },
+  dirPillText: { fontFamily: 'Helvetica Neue', fontSize: 9, color: '#3CC4C4' },
+  addBtn: {
+    backgroundColor: '#1B7A87',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 16,
+  },
+  addBtnText: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 12,
+    color: '#E8D5B8',
+  },
+  addedBtn: {
+    backgroundColor: 'rgba(60, 196, 196, 0.2)',
+    borderWidth: 0.5,
+    borderColor: '#3CC4C4',
+    borderRadius: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+  },
+  addedBtnText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#3CC4C4',
+  },
+
+  // Fixed bottom section
+  fixedBottom: {
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 16,
+    backgroundColor: '#0B2230',
+  },
+  callout: {
+    backgroundColor: 'rgba(27, 90, 106, 0.15)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(60, 196, 196, 0.25)',
+    borderStyle: 'dashed',
     borderRadius: 10,
     paddingHorizontal: 14,
     paddingVertical: 12,
+    marginBottom: 14,
+    gap: 3,
   },
-  ratedCardLeft: { gap: 4 },
-  ratedName: { fontFamily: 'Georgia', fontSize: 14, color: '#2A1A08' },
-  ratedDots: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  miniDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    borderWidth: 1,
-    borderColor: '#C5A882',
-    backgroundColor: 'transparent',
+  calloutLine1: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#4A7A87',
   },
-  miniDotFilled: { backgroundColor: '#1B7A87', borderColor: '#1B7A87' },
-  favStar: { color: '#7F77DD', fontSize: 13, marginLeft: 4 },
-  removeText: { color: '#A89070', fontSize: 16 },
-  actions: { marginTop: 'auto', paddingTop: 24, gap: 8 },
-  primaryButton: {
+  calloutLine2: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#4A7A87',
+  },
+  continueButton: {
     backgroundColor: '#1B7A87',
     borderRadius: 14,
-    paddingVertical: 15,
+    paddingVertical: 14,
     alignItems: 'center',
+    marginBottom: 10,
   },
-  primaryButtonText: {
+  continueButtonText: {
     color: '#E8D5B8',
-    fontSize: 15,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '500',
     fontFamily: 'Helvetica Neue',
   },
-  skipButton: { alignItems: 'center', paddingVertical: 12 },
-  skipText: { color: '#A89070', fontSize: 14, fontFamily: 'Helvetica Neue' },
+  skipButton: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderWidth: 0.5,
+    borderColor: 'rgba(74, 122, 135, 0.4)',
+    borderRadius: 10,
+  },
+  skipText: {
+    color: '#4A7A87',
+    fontSize: 12,
+    fontFamily: 'Helvetica Neue',
+  },
+
+  // Bottom sheet
   overlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.55)',
   },
   sheet: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#0F2838',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     paddingHorizontal: 24,
@@ -365,7 +606,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#D4BFA0',
+    backgroundColor: 'rgba(74, 122, 135, 0.4)',
     alignSelf: 'center',
     marginBottom: 8,
   },
@@ -373,14 +614,14 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontWeight: 'bold',
     fontSize: 20,
-    color: '#2A1A08',
+    color: '#E8D5B8',
   },
   sheetLabel: {
     fontFamily: 'Helvetica Neue',
     fontWeight: '300',
-    fontSize: 11,
+    fontSize: 10,
     letterSpacing: 2,
-    color: '#8A7055',
+    color: '#4A7A87',
   },
   favRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   favCheck: {
@@ -388,13 +629,13 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 6,
     borderWidth: 1.5,
-    borderColor: '#C5A882',
+    borderColor: 'rgba(74, 122, 135, 0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   favCheckActive: { backgroundColor: '#7F77DD', borderColor: '#7F77DD' },
   favCheckMark: { color: '#FFFFFF', fontSize: 13, fontWeight: 'bold' },
-  favLabel: { fontFamily: 'Helvetica Neue', fontSize: 14, color: '#2A1A08' },
+  favLabel: { fontFamily: 'Helvetica Neue', fontSize: 14, color: '#E8D5B8' },
   confirmButton: {
     backgroundColor: '#1B7A87',
     borderRadius: 14,

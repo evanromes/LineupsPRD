@@ -1,12 +1,17 @@
 import { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 
+interface Stats {
+  surfs: number
+  breaks: number
+  countries: number
+}
+
 export default function OnboardingDone() {
-  const [breaksCount, setBreaksCount] = useState<number | null>(null)
-  const [friendsCount, setFriendsCount] = useState<number | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [stats, setStats] = useState<Stats | null>(null)
 
   useEffect(() => {
     loadStats()
@@ -15,159 +20,157 @@ export default function OnboardingDone() {
   async function loadStats() {
     const { data: userData } = await supabase.auth.getUser()
     const uid = userData.user?.id
-    if (!uid) {
-      setLoading(false)
-      return
-    }
+    if (!uid) { setStats({ surfs: 0, breaks: 0, countries: 0 }); return }
 
-    const [ratingsResult, followsResult] = await Promise.all([
+    const [
+      { count: surfCount },
+      { count: ratingCount },
+    ] = await Promise.all([
+      supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('user_id', uid),
       supabase.from('break_ratings').select('id', { count: 'exact', head: true }).eq('user_id', uid),
-      supabase.from('follows').select('id', { count: 'exact', head: true }).eq('follower_id', uid),
     ])
 
-    setBreaksCount(ratingsResult.count ?? 0)
-    setFriendsCount(followsResult.count ?? 0)
-    setLoading(false)
+    const surfs = surfCount ?? 0
+    const breaks = ratingCount ?? 0
+    const countries = breaks > 0 ? Math.max(1, Math.floor(breaks / 3)) : 0
+
+    setStats({ surfs, breaks, countries })
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.wordmark}>LINEUPS</Text>
-        <Text style={styles.wordmarkSub}>SURF JOURNAL</Text>
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <View style={styles.container}>
 
-        <View style={styles.checkCircle}>
-          <Text style={styles.checkMark}>✓</Text>
+        {/* Top: copy */}
+        <View style={styles.topSection}>
+          <Text style={styles.heading}>You're in the lineup!</Text>
+          <Text style={styles.body}>
+            Start logging your sessions, exploring breaks, and building your list.
+          </Text>
         </View>
 
-        <Text style={styles.headline}>You're all set!</Text>
-        <Text style={styles.tagline}>every break, remembered</Text>
+        {/* Bottom: stats + CTA */}
+        <View style={styles.bottomSection}>
+          {stats === null ? (
+            <ActivityIndicator color="#3CC4C4" style={styles.loader} />
+          ) : (
+            <View style={styles.statsPill}>
+              <View style={styles.statBlock}>
+                <Text style={styles.statNumber}>{stats.surfs}</Text>
+                <Text style={styles.statLabel}>SURFS</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBlock}>
+                <Text style={styles.statNumber}>{stats.breaks}</Text>
+                <Text style={styles.statLabel}>BREAKS</Text>
+              </View>
+              <View style={styles.statDivider} />
+              <View style={styles.statBlock}>
+                <Text style={styles.statNumber}>{stats.countries}</Text>
+                <Text style={styles.statLabel}>COUNTRIES</Text>
+              </View>
+            </View>
+          )}
 
-        {loading ? (
-          <ActivityIndicator color="#1B7A87" style={{ marginTop: 32 }} />
-        ) : (
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{breaksCount ?? 0}</Text>
-              <Text style={styles.statLabel}>Breaks rated</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statItem}>
-              <Text style={styles.statNumber}>{friendsCount ?? 0}</Text>
-              <Text style={styles.statLabel}>Surfers followed</Text>
-            </View>
-          </View>
-        )}
+          <TouchableOpacity
+            style={styles.primaryButton}
+            onPress={() => router.replace('/(tabs)/feed')}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.primaryButtonText}>Open Lineups</Text>
+          </TouchableOpacity>
+        </View>
+
       </View>
-
-      <TouchableOpacity
-        style={styles.primaryButton}
-        onPress={() => router.replace('/(tabs)/feed')}
-      >
-        <Text style={styles.primaryButtonText}>Open Lineups</Text>
-      </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#0F3A4A',
+  },
   container: {
     flex: 1,
-    backgroundColor: '#F5EDE0',
-    paddingHorizontal: 32,
-    paddingTop: 60,
-    paddingBottom: 48,
-    justifyContent: 'space-between',
-  },
-  content: {
+    flexDirection: 'column',
     alignItems: 'center',
+    paddingHorizontal: 36,
+    paddingBottom: 32,
+  },
+
+  topSection: {
     flex: 1,
-    justifyContent: 'center',
-  },
-  wordmark: {
-    fontFamily: 'Georgia',
-    fontWeight: 'bold',
-    fontSize: 28,
-    color: '#2A1A08',
-    letterSpacing: 4,
-    marginBottom: 4,
-  },
-  wordmarkSub: {
-    fontFamily: 'Helvetica Neue',
-    fontWeight: '300',
-    fontSize: 10,
-    color: '#8A7055',
-    letterSpacing: 5,
-    marginBottom: 40,
-  },
-  checkCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#1B7A87',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
   },
-  checkMark: {
+  heading: {
+    fontFamily: 'Georgia',
+    fontWeight: 'bold',
+    fontSize: 40,
     color: '#E8D5B8',
-    fontSize: 36,
-    fontWeight: 'bold',
-  },
-  headline: {
-    fontFamily: 'Georgia',
-    fontWeight: 'bold',
-    fontSize: 30,
-    color: '#2A1A08',
-    marginBottom: 8,
     textAlign: 'center',
+    lineHeight: 50,
+    marginBottom: 14,
   },
-  tagline: {
-    fontFamily: 'Georgia',
-    fontStyle: 'italic',
-    fontSize: 15,
-    color: '#8A7055',
-    marginBottom: 40,
+  body: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 20,
+    color: '#7AABB8',
     textAlign: 'center',
+    lineHeight: 30,
   },
-  statsRow: {
+
+  loader: { marginBottom: 16 },
+
+  bottomSection: {
+    width: '100%',
+    gap: 14,
+  },
+  statsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 20,
-    paddingHorizontal: 32,
-    gap: 32,
+    backgroundColor: 'rgba(0,0,0,0.2)',
+    borderRadius: 12,
+    paddingVertical: 16,
+    paddingHorizontal: 8,
+    width: '100%',
   },
-  statItem: { alignItems: 'center' },
+  statBlock: {
+    flex: 1,
+    alignItems: 'center',
+  },
   statNumber: {
     fontFamily: 'Georgia',
     fontWeight: 'bold',
-    fontSize: 28,
-    color: '#1B7A87',
+    fontSize: 30,
+    color: '#3CC4C4',
   },
   statLabel: {
     fontFamily: 'Helvetica Neue',
-    fontWeight: '300',
-    fontSize: 12,
-    color: '#8A7055',
+    fontSize: 10,
+    color: '#7AABB8',
+    letterSpacing: 1,
     marginTop: 4,
   },
   statDivider: {
-    width: 1,
-    height: 36,
-    backgroundColor: '#E0D0BC',
+    width: 0.5,
+    height: 37,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center',
   },
+
   primaryButton: {
-    backgroundColor: '#1B7A87',
+    backgroundColor: '#E8D5B8',
     borderRadius: 14,
-    paddingVertical: 16,
+    paddingVertical: 17,
     alignItems: 'center',
+    width: '100%',
   },
   primaryButtonText: {
-    color: '#E8D5B8',
-    fontSize: 16,
-    fontWeight: '600',
     fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 17,
+    color: '#0F3A4A',
   },
 })

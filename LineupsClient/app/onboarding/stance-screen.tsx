@@ -1,34 +1,3 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// ONBOARDING PATTERN — one question per screen
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-//
-// Every remaining screen must follow this spec exactly:
-//
-// SCREENS IN ORDER:
-//   app/onboarding/stance.tsx          ← THIS FILE (experience level)
-//   app/onboarding/stance-screen.tsx   → "Regular or Goofy?"
-//   app/onboarding/board.tsx           → "What's your preferred board?"
-//   app/onboarding/homebreak.tsx       → "What's your home break?"
-//   app/onboarding/history.tsx         → "Add breaks you've already surfed"
-//   app/onboarding/friends.tsx         → "Find your crew"
-//   app/onboarding/done.tsx            → "You're in the lineup"
-//
-// RULES:
-//  1. ONE question or task per screen — never more
-//  2. All content vertically centered — keyboard never displaces the question
-//  3. Back chevron top-left on every screen (except done.tsx)
-//  4. Section label: Helvetica Neue 9px #4A7A87 letterSpacing 2px ALL CAPS above every heading
-//  5. Subtext answers WHAT we collect AND WHY — always both
-//  6. Progress dots always visible at top of screen
-//  7. Heading: Georgia bold 20px #E8D5B8
-//  8. Subtext: Helvetica Neue 300 11px #4A7A87
-//  9. Primary button: full width, #1B7A87, height 48px, radius 12px, disabled until valid selection
-// 10. Ghost/skip button: transparent bg, 0.5px rgba(197,168,130,0.4) border, radius 10px,
-//     full width, Helvetica Neue 13px #C5A882
-// 11. Option cards: unselected rgba(42,26,8,0.35) / selected #0F4E63 with radio dot
-// 12. Save each answer to Supabase immediately on Next tap before navigating
-// 13. Background #0B2230 for all dark onboarding screens
-
 import { useState, useEffect } from 'react'
 import {
   View,
@@ -41,28 +10,23 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 
-type ExperienceLevel = 'beginner' | 'intermediate' | 'advanced' | 'expert'
+type StanceValue = 'regular' | 'goofy' | null
 
-const OPTIONS: { value: ExperienceLevel; label: string; description: string }[] = [
+const OPTIONS: { value: StanceValue; label: string; description: string }[] = [
   {
-    value: 'beginner',
-    label: 'Beginner',
-    description: 'Still finding your feet — working on pop-ups and whitewater',
+    value: 'regular',
+    label: 'Regular',
+    description: 'You surf with your right foot back',
   },
   {
-    value: 'intermediate',
-    label: 'Intermediate',
-    description: 'Comfortable on green waves, starting to work the face',
+    value: 'goofy',
+    label: 'Goofy',
+    description: 'You surf with your left foot back',
   },
   {
-    value: 'advanced',
-    label: 'Advanced',
-    description: 'Surfing overhead+ with confidence, charging bigger days',
-  },
-  {
-    value: 'expert',
-    label: 'Expert',
-    description: 'High-performance surfing, comfortable in serious conditions',
+    value: null,
+    label: 'N/A',
+    description: "You have no preference or don't know — this won't show on your profile",
   },
 ]
 
@@ -113,8 +77,8 @@ const dotStyles = StyleSheet.create({
   },
 })
 
-export default function OnboardingExperience() {
-  const [selected, setSelected] = useState<ExperienceLevel | null>(null)
+export default function OnboardingStanceScreen() {
+  const [selected, setSelected] = useState<StanceValue | undefined>(undefined)
   const [userId, setUserId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
 
@@ -125,15 +89,17 @@ export default function OnboardingExperience() {
   }, [])
 
   async function handleNext() {
-    if (!selected || !userId) return
+    if (selected === undefined || !userId) return
     setSaving(true)
     await supabase
       .from('profiles')
-      .update({ experience_level: selected })
+      .update({ stance: selected })
       .eq('id', userId)
     setSaving(false)
-    router.push('/onboarding/stance-screen')
+    router.push('/onboarding/board')
   }
+
+  const isReady = selected !== undefined
 
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
@@ -141,7 +107,7 @@ export default function OnboardingExperience() {
 
         {/* Progress dots */}
         <View style={styles.dotsRow}>
-          <ProgressDots total={5} current={2} />
+          <ProgressDots total={5} current={3} />
         </View>
 
         {/* Back chevron */}
@@ -151,15 +117,15 @@ export default function OnboardingExperience() {
 
         {/* Vertically centered content */}
         <View style={styles.center}>
-          <Text style={styles.heading}>What's your experience level?</Text>
-          <Text style={styles.subtext}>This helps us show you the right breaks</Text>
+          <Text style={styles.heading}>What's your stance?</Text>
+          <Text style={styles.subtext}>This will show on your profile to other surfers</Text>
 
           <View style={styles.cardList}>
-            {OPTIONS.map((opt) => {
-              const isSelected = selected === opt.value
+            {OPTIONS.map((opt, i) => {
+              const isSelected = selected === opt.value && selected !== undefined
               return (
                 <TouchableOpacity
-                  key={opt.value}
+                  key={i}
                   style={[styles.card, isSelected && styles.cardSelected]}
                   onPress={() => setSelected(opt.value)}
                   activeOpacity={0.8}
@@ -181,9 +147,9 @@ export default function OnboardingExperience() {
           </View>
 
           <TouchableOpacity
-            style={[styles.nextButton, (!selected || saving) && styles.disabled]}
+            style={[styles.nextButton, (!isReady || saving) && styles.disabled]}
             onPress={handleNext}
-            disabled={!selected || saving}
+            disabled={!isReady || saving}
             activeOpacity={0.85}
           >
             {saving ? (
@@ -234,6 +200,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingBottom: 96,
   },
 
   heading: {
