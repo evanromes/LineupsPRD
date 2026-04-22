@@ -19,6 +19,7 @@ interface Break {
   lng: number | null
   type: string | null
   direction: string | null
+  region: string | null
 }
 
 function getLocationLabel(lat: number | null, lng: number | null): string | null {
@@ -98,12 +99,24 @@ export default function OnboardingHomeBreak() {
 
     setSearching(true)
     searchTimer.current = setTimeout(async () => {
-      const { data } = await supabase
-        .from('breaks')
-        .select('id, name, lat, lng, type, direction')
-        .ilike('name', `%${term}%`)
-        .limit(6)
-      setResults(data ?? [])
+      const [byName, byRegion] = await Promise.all([
+        supabase
+          .from('breaks')
+          .select('id, name, lat, lng, type, direction, region')
+          .ilike('name', `%${term}%`)
+          .limit(6),
+        supabase
+          .from('breaks')
+          .select('id, name, lat, lng, type, direction, region')
+          .ilike('region', `%${term}%`)
+          .limit(6),
+      ])
+      const seen = new Set<string>()
+      const merged: Break[] = []
+      for (const item of [...(byName.data ?? []), ...(byRegion.data ?? [])]) {
+        if (!seen.has(item.id)) { seen.add(item.id); merged.push(item) }
+      }
+      setResults(merged.slice(0, 8))
       setSearching(false)
     }, 300)
   }, [query])
@@ -124,7 +137,7 @@ export default function OnboardingHomeBreak() {
         .eq('id', userId)
     }
     setSaving(false)
-    router.push('/onboarding/friends')
+    router.push('/onboarding/contacts')
   }
 
   const showResults = query.trim().length > 0 && results.length > 0 && !selected
@@ -173,9 +186,9 @@ export default function OnboardingHomeBreak() {
             <View style={styles.selectedCard}>
               <View style={styles.selectedCardBody}>
                 <Text style={styles.selectedBreakName}>{selected.name}</Text>
-                {getLocationLabel(selected.lat, selected.lng) && (
+                {(selected.region ?? getLocationLabel(selected.lat, selected.lng)) && (
                   <Text style={styles.selectedBreakLoc}>
-                    {getLocationLabel(selected.lat, selected.lng)}
+                    {selected.region ?? getLocationLabel(selected.lat, selected.lng)}
                   </Text>
                 )}
               </View>
@@ -215,8 +228,8 @@ export default function OnboardingHomeBreak() {
                 >
                   <View style={styles.resultLeft}>
                     <Text style={styles.resultName}>{b.name}</Text>
-                    {getLocationLabel(b.lat, b.lng) && (
-                      <Text style={styles.resultRegion}>{getLocationLabel(b.lat, b.lng)}</Text>
+                    {(b.region ?? getLocationLabel(b.lat, b.lng)) && (
+                      <Text style={styles.resultRegion}>{b.region ?? getLocationLabel(b.lat, b.lng)}</Text>
                     )}
                   </View>
                   <Text style={styles.resultArrow}>›</Text>

@@ -163,6 +163,11 @@ export default function OnboardingProfile() {
       setError(dbError.message)
       return
     }
+
+    // Store email separately — silently ignored if column doesn't exist yet
+    if (userEmail) {
+      await supabase.from('profiles').update({ email: userEmail }).eq('id', userId)
+    }
     router.replace('/onboarding/stance')
   }
 

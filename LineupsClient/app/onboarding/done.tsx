@@ -27,7 +27,7 @@ export default function OnboardingDone() {
       { count: ratingCount },
     ] = await Promise.all([
       supabase.from('sessions').select('id', { count: 'exact', head: true }).eq('user_id', uid),
-      supabase.from('break_ratings').select('id', { count: 'exact', head: true }).eq('user_id', uid),
+      supabase.from('break_ratings').select('break_id', { count: 'exact', head: true }).eq('user_id', uid),
     ])
 
     const surfs = surfCount ?? 0
@@ -89,7 +89,7 @@ export default function OnboardingDone() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#0F3A4A',
+    backgroundColor: '#0B2230',
   },
   container: {
     flex: 1,
@@ -116,7 +116,7 @@ const styles = StyleSheet.create({
   body: {
     fontFamily: 'Helvetica Neue',
     fontSize: 20,
-    color: '#7AABB8',
+    color: '#4A7A87',
     textAlign: 'center',
     lineHeight: 30,
   },
@@ -130,7 +130,9 @@ const styles = StyleSheet.create({
   statsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.2)',
+    backgroundColor: 'rgba(11, 34, 48, 0.8)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(74, 122, 135, 0.4)',
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 8,
@@ -144,24 +146,24 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontWeight: 'bold',
     fontSize: 30,
-    color: '#3CC4C4',
+    color: '#E8D5B8',
   },
   statLabel: {
     fontFamily: 'Helvetica Neue',
     fontSize: 10,
-    color: '#7AABB8',
+    color: '#4A7A87',
     letterSpacing: 1,
     marginTop: 4,
   },
   statDivider: {
     width: 0.5,
     height: 37,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    backgroundColor: 'rgba(74, 122, 135, 0.3)',
     alignSelf: 'center',
   },
 
   primaryButton: {
-    backgroundColor: '#E8D5B8',
+    backgroundColor: '#1B7A87',
     borderRadius: 14,
     paddingVertical: 17,
     alignItems: 'center',
@@ -171,6 +173,6 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica Neue',
     fontWeight: '500',
     fontSize: 17,
-    color: '#0F3A4A',
+    color: '#E8D5B8',
   },
 })
