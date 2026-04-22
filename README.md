@@ -18,6 +18,97 @@ Lineups is a surf session tracking app. Users log surf sessions, rate breaks, an
 
 ---
 
+## Theming Architecture
+
+Lineups supports **light and dark mode** with a user-controlled toggle (defaults to system preference). The infrastructure is set up and ready — screens are migrated to it incrementally as functionality stabilises.
+
+### How it works
+
+```
+constants/colors.ts      — semantic color token objects (darkTheme, lightTheme, brand)
+context/ThemeContext.tsx  — React Context, toggle function, AsyncStorage persistence
+```
+
+The user's preference is persisted to `AsyncStorage` under the key `@lineups_theme`. On first launch it defaults to the device system preference (`useColorScheme()`).
+
+### Token structure (`constants/colors.ts`)
+
+Each theme exports an object with identical keys but different values:
+
+| Token | Dark value | Light value |
+|---|---|---|
+| `background` | `#0B2230` | `#F5EDE0` |
+| `cardBackground` | `#0F2838` | `#EDE0CC` |
+| `titleText` | `#E8D5B8` | `#2A1A08` |
+| `subtext` | `#4A7A87` | `#A8845A` |
+| `borderPrimary` | `#E8D5B8` | `#C5A882` |
+| `placeholder` | `#4A7A87` | `#C5A882` |
+| `ctaBackground` | `#1B7A87` | `#1B7A87` |
+| `followBorder/Text` | `#3CC4C4` | `#1B7A87` |
+| `typePillBackground` | `rgba(83,74,183,0.2)` | `#EEEDFE` |
+| `dirPillBackground` | `rgba(15,110,86,0.2)` | `#E1F5EE` |
+
+A separate `brand` object holds colors that never change between themes (`teal`, `aqua`, `cream`, `purple`, etc.).
+
+### Using the theme in a component
+
+```tsx
+import { useTheme } from '../context/ThemeContext'
+import { StyleSheet } from 'react-native'
+import type { Theme } from '../constants/colors'
+
+export default function MyScreen() {
+  const { theme } = useTheme()
+  const styles = getStyles(theme)
+
+  return <View style={styles.container} />
+}
+
+function getStyles(theme: Theme) {
+  return StyleSheet.create({
+    container: { backgroundColor: theme.background },
+    title: { color: theme.titleText },
+  })
+}
+```
+
+The key pattern: **replace `StyleSheet.create({...})` at module scope with a `getStyles(theme)` function called inside the component**, so styles are recomputed when the theme changes.
+
+### Wiring the provider
+
+`ThemeProvider` needs to wrap the root of the app in `app/_layout.tsx` (or equivalent):
+
+```tsx
+import { ThemeProvider } from '../context/ThemeContext'
+
+export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      {/* rest of app */}
+    </ThemeProvider>
+  )
+}
+```
+
+### Toggle UI
+
+A toggle switch (to be added to the Profile screen settings) calls:
+```tsx
+const { toggleTheme, themeType } = useTheme()
+// themeType is 'light' | 'dark'
+```
+
+### Migration status
+
+Screens are migrated to theme tokens incrementally. Until a screen is migrated, it uses hardcoded hex strings and will not respond to the toggle.
+
+| Screen | Migrated |
+|---|---|
+| All onboarding screens | — pending |
+| Tab screens (map, feed, journal, breaks, profile) | — pending |
+
+---
+
 ## Design System
 
 ### Color Palette (Reef)
