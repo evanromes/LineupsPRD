@@ -16,8 +16,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import Svg, { Path, Circle } from 'react-native-svg'
+import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
+
+// ─── Wordmark ─────────────────────────────────────────────────────────────────
+
+function LineupsWordmark() {
+  return (
+    <Svg width={95} height={44} viewBox="20 120 360 185">
+      <SvgText x="200" y="195" fontFamily="Georgia, serif" fontSize="71" fontWeight="700"
+        fill="#E8D5B8" textAnchor="middle" letterSpacing="2">Lineups</SvgText>
+      <Path d="M60 240 Q130 224,200 240 Q270 256,340 240" fill="none" stroke="#3CC4C4" strokeWidth="3.5" strokeLinecap="round" />
+      <Path d="M60 262 Q130 246,200 262 Q270 278,340 262" fill="none" stroke="#3CC4C4" strokeWidth="2.9" strokeLinecap="round" opacity="0.6" />
+      <Path d="M60 282 Q130 268,200 282 Q270 296,340 282" fill="none" stroke="#3CC4C4" strokeWidth="2.3" strokeLinecap="round" opacity="0.3" />
+    </Svg>
+  )
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -163,10 +177,10 @@ function FeedCard({
         <Text style={styles.breakName} numberOfLines={1}>{breakName}</Text>
         <View style={styles.pillRow}>
           {session.breaks?.type && (
-            <Pill label={session.breaks.type} bgColor="#EEEDFE" textColor="#534AB7" />
+            <Pill label={session.breaks.type} bgColor="rgba(83,74,183,0.2)" textColor="#9B95E8" />
           )}
           {session.breaks?.direction && (
-            <Pill label={session.breaks.direction} bgColor="#E1F5EE" textColor="#0F6E56" />
+            <Pill label={session.breaks.direction} bgColor="rgba(15,110,86,0.2)" textColor="#3CC4C4" />
           )}
         </View>
       </View>
@@ -238,7 +252,7 @@ function FeedCard({
             <Ionicons
               name={session.liked ? 'heart' : 'heart-outline'}
               size={16}
-              color={session.liked ? '#1B7A87' : '#A8845A'}
+              color={session.liked ? '#3CC4C4' : '#4A7A87'}
             />
             <Text style={[styles.actionText, session.liked && styles.actionTextLiked]}>
               {session.likeCount}
@@ -247,7 +261,7 @@ function FeedCard({
 
           {/* Comments */}
           <TouchableOpacity style={styles.actionBtn} activeOpacity={0.7} hitSlop={8}>
-            <Ionicons name="chatbubble-outline" size={15} color="#A8845A" />
+            <Ionicons name="chatbubble-outline" size={15} color="#4A7A87" />
             <Text style={styles.actionText}>0</Text>
           </TouchableOpacity>
         </View>
@@ -366,18 +380,19 @@ export default function FeedScreen() {
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5EDE0" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B2230" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Feed</Text>
+      {/* ── Top bar ── */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
+        <View style={styles.topBarSide} />
+        <LineupsWordmark />
         <TouchableOpacity
+          style={[styles.topBarSide, { alignItems: 'flex-end' }]}
           onPress={() => Alert.alert('Coming soon', 'Find friends coming soon')}
           hitSlop={10}
-          style={styles.headerIcon}
         >
-          <Ionicons name="people-outline" size={22} color="#1B7A87" />
+          <Ionicons name="people-outline" size={20} color="#E8D5B8" />
         </TouchableOpacity>
       </View>
 
@@ -390,7 +405,7 @@ export default function FeedScreen() {
       ) : feedState === 'not-following' ? (
         <ScrollView
           contentContainerStyle={styles.emptyWrap}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1B7A87" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3CC4C4" />}
         >
           <WaveIllustration />
           <Text style={styles.emptyTitle}>Your feed is empty</Text>
@@ -409,7 +424,7 @@ export default function FeedScreen() {
       ) : feedState === 'empty' ? (
         <ScrollView
           contentContainerStyle={styles.emptyWrap}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1B7A87" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3CC4C4" />}
         >
           <Text style={styles.emptyQuote}>
             Nothing yet — check back after the next swell.
@@ -420,7 +435,7 @@ export default function FeedScreen() {
         <FlatList
           data={sessions}
           keyExtractor={item => item.id}
-          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#1B7A87" />}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3CC4C4" />}
           contentContainerStyle={[
             styles.listContent,
             { paddingBottom: insets.bottom + 100 },
@@ -441,27 +456,20 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EDE0',
+    backgroundColor: '#0B2230',
   },
 
-  // Header
-  header: {
+  // Top bar
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#D8C8B0',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
   },
-  headerTitle: {
-    fontFamily: 'Georgia',
-    fontWeight: '700',
-    fontSize: 24,
-    color: '#2A1A08',
-  },
-  headerIcon: {
-    padding: 2,
+  topBarSide: {
+    width: 80,
+    justifyContent: 'center',
   },
 
   // Loader / empty
@@ -481,13 +489,13 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontWeight: '700',
     fontSize: 18,
-    color: '#2A1A08',
+    color: '#E8D5B8',
     marginTop: 8,
   },
   emptySubtitle: {
     fontFamily: 'Helvetica Neue',
     fontSize: 12,
-    color: '#A8845A',
+    color: '#4A7A87',
     textAlign: 'center',
     lineHeight: 18,
   },
@@ -495,7 +503,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontStyle: 'italic',
     fontSize: 14,
-    color: '#A8845A',
+    color: '#4A7A87',
     textAlign: 'center',
     lineHeight: 22,
     paddingHorizontal: 16,
@@ -522,9 +530,9 @@ const styles = StyleSheet.create({
 
   // Card
   card: {
-    backgroundColor: '#FEFAF5',
+    backgroundColor: '#0F2838',
     borderWidth: 0.5,
-    borderColor: '#D8C8B0',
+    borderColor: 'rgba(74,122,135,0.3)',
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 16,
@@ -561,18 +569,18 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica Neue',
     fontSize: 12,
     fontWeight: '500',
-    color: '#2A1A08',
+    color: '#E8D5B8',
   },
   usernameText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 10,
-    color: '#A8845A',
+    color: '#4A7A87',
     marginTop: 1,
   },
   timestamp: {
     fontFamily: 'Helvetica Neue',
     fontSize: 10,
-    color: '#A8845A',
+    color: '#4A7A87',
     flexShrink: 0,
     marginLeft: 8,
   },
@@ -586,7 +594,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontWeight: '700',
     fontSize: 15,
-    color: '#2A1A08',
+    color: '#E8D5B8',
     marginBottom: 4,
   },
   pillRow: {
@@ -622,7 +630,7 @@ const styles = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 3.5,
-    backgroundColor: '#1B7A87',
+    backgroundColor: '#3CC4C4',
   },
   dotEmpty: {
     width: 7,
@@ -630,14 +638,14 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#C5A882',
+    borderColor: '#1B5A6A',
   },
   chipsRow: {
     gap: 6,
     paddingRight: 4,
   },
   chip: {
-    backgroundColor: '#F0E4D0',
+    backgroundColor: 'rgba(74,122,135,0.15)',
     borderRadius: 8,
     paddingHorizontal: 10,
     paddingVertical: 4,
@@ -645,21 +653,21 @@ const styles = StyleSheet.create({
   chipText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 10,
-    color: '#7A4E2A',
+    color: '#4A7A87',
     letterSpacing: 0.2,
   },
 
   // 4. Photo strip
   photoStrip: {
     marginTop: 8,
-    marginHorizontal: -16,  // bleed to card edges
+    marginHorizontal: -16,
     borderRadius: 10,
     overflow: 'hidden',
   },
   feedPhoto: {
     height: 200,
     borderRadius: 10,
-    backgroundColor: '#D8C8B0',
+    backgroundColor: '#0B2230',
     marginHorizontal: 4,
   },
 
@@ -668,7 +676,7 @@ const styles = StyleSheet.create({
     fontFamily: 'Georgia',
     fontStyle: 'italic',
     fontSize: 13,
-    color: '#6B4E2A',
+    color: '#4A7A87',
     lineHeight: 20.8,
     marginTop: 8,
   },
@@ -681,7 +689,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingTop: 10,
     borderTopWidth: 0.5,
-    borderTopColor: '#EDE0CC',
+    borderTopColor: 'rgba(74,122,135,0.25)',
   },
   actionLeft: {
     flexDirection: 'row',
@@ -696,15 +704,15 @@ const styles = StyleSheet.create({
   actionText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 11,
-    color: '#A8845A',
+    color: '#4A7A87',
   },
   actionTextLiked: {
-    color: '#1B7A87',
+    color: '#3CC4C4',
   },
   viewBreak: {
     fontFamily: 'Helvetica Neue',
     fontSize: 10,
-    color: '#1B7A87',
+    color: '#3CC4C4',
     letterSpacing: 0.2,
   },
 })

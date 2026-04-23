@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Animated,
   ActivityIndicator,
   Alert,
   ScrollView,
@@ -12,7 +13,28 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
+import Svg, { Text as SvgText, Path } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
+
+// ─── Wordmark ─────────────────────────────────────────────────────────────────
+
+function LineupsWordmark() {
+  return (
+    <Svg width={95} height={44} viewBox="20 120 360 185">
+      <SvgText
+        x="200" y="195"
+        fontFamily="Georgia, serif"
+        fontSize="71" fontWeight="700"
+        fill="#E8D5B8" textAnchor="middle" letterSpacing="2"
+      >
+        Lineups
+      </SvgText>
+      <Path d="M60 240 Q130 224,200 240 Q270 256,340 240" fill="none" stroke="#3CC4C4" strokeWidth="3.5" strokeLinecap="round" />
+      <Path d="M60 262 Q130 246,200 262 Q270 278,340 262" fill="none" stroke="#3CC4C4" strokeWidth="2.9" strokeLinecap="round" opacity="0.6" />
+      <Path d="M60 282 Q130 268,200 282 Q270 296,340 282" fill="none" stroke="#3CC4C4" strokeWidth="2.3" strokeLinecap="round" opacity="0.3" />
+    </Svg>
+  )
+}
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
@@ -20,7 +42,7 @@ function avatarColor(username: string): string {
   const c = (username || 'a').charAt(0).toLowerCase()
   if (c >= 'a' && c <= 'f') return '#1B7A87'
   if (c >= 'g' && c <= 'l') return '#7F77DD'
-  if (c >= 'm' && c <= 'r') return '#C5A882'
+  if (c >= 'm' && c <= 'r') return '#3A6A70'
   return '#0F5A65'
 }
 
@@ -51,6 +73,7 @@ interface Profile {
   username: string
   display_name: string | null
   bio: string | null
+  created_at: string | null
 }
 
 interface RatedBreak {
@@ -65,7 +88,6 @@ interface RatedBreak {
     type: string | null
     direction: string | null
   } | null
-  // enriched from sessions table
   sessionCount: number
   avgSessionRating: number | null
 }
@@ -86,7 +108,7 @@ interface RegionGroup {
   items: RatedBreak[]
 }
 
-// ─── Tiny shared components ───────────────────────────────────────────────────
+// ─── Shared components ────────────────────────────────────────────────────────
 
 function Pill({ label, bg, color }: { label: string; bg: string; color: string }) {
   return (
@@ -96,7 +118,7 @@ function Pill({ label, bg, color }: { label: string; bg: string; color: string }
   )
 }
 
-function DotRating({ rating, size = 5 }: { rating: number; size?: number }) {
+function DotRating({ rating, size = 9 }: { rating: number; size?: number }) {
   return (
     <View style={styles.dots}>
       {[1, 2, 3, 4, 5].map(i => (
@@ -112,25 +134,26 @@ function DotRating({ rating, size = 5 }: { rating: number; size?: number }) {
   )
 }
 
-// ─── Break row (used inside Breaks tab) ───────────────────────────────────────
+// ─── Break row ────────────────────────────────────────────────────────────────
 
 function BreakRow({ item, rank }: { item: RatedBreak; rank: number }) {
   const b = item.breaks
   if (!b) return null
+  const region = regionFromLatLng(b.lat, b.lng)
   return (
     <TouchableOpacity
       style={styles.breakRow}
-      activeOpacity={0.75}
+      activeOpacity={0.6}
       onPress={() => router.push({ pathname: '/break-detail', params: { id: item.break_id, name: b.name } })}
     >
       <Text style={[styles.breakRank, rank <= 2 && styles.breakRankTop]}>{rank}</Text>
 
-      {/* Center body */}
       <View style={styles.breakInfo}>
         <Text style={styles.breakName} numberOfLines={1}>{b.name}</Text>
+        <Text style={styles.breakRegion}>{region}</Text>
         <View style={styles.breakPills}>
-          {b.type && <Pill label={b.type} bg="#EEEDFE" color="#534AB7" />}
-          {b.direction && <Pill label={b.direction} bg="#E1F5EE" color="#0F6E56" />}
+          {b.type && <Pill label={b.type} bg="rgba(83,74,183,0.2)" color="#9B95E8" />}
+          {b.direction && <Pill label={b.direction} bg="rgba(15,110,86,0.2)" color="#3CC4C4" />}
         </View>
         {item.sessionCount > 0 && (
           <View style={styles.sessionStatsRow}>
@@ -138,30 +161,31 @@ function BreakRow({ item, rank }: { item: RatedBreak; rank: number }) {
             {item.avgSessionRating != null && (
               <>
                 <Text style={styles.sessionStatText}> · </Text>
-                <Text style={styles.sessionAvgText}>
-                  {item.avgSessionRating.toFixed(1)} avg
-                </Text>
+                <Text style={styles.sessionAvgText}>{item.avgSessionRating.toFixed(1)} avg</Text>
               </>
             )}
           </View>
         )}
       </View>
 
-      {/* Right side */}
       <View style={styles.breakRight}>
         {item.rating != null && item.rating > 0 && (
           <View style={styles.ratingBlock}>
-            <Text style={styles.breakRatingLabel}>BREAK</Text>
+            <Text style={styles.breakRatingLabel}>RATING</Text>
             <DotRating rating={item.rating} />
           </View>
         )}
-        {item.is_favorite && <View style={styles.favDot} />}
+        {item.is_favorite && (
+          <View style={styles.favPill}>
+            <Text style={styles.favPillText}>🏄 Favorite</Text>
+          </View>
+        )}
       </View>
     </TouchableOpacity>
   )
 }
 
-// ─── Breaks tab content ───────────────────────────────────────────────────────
+// ─── Breaks tab ───────────────────────────────────────────────────────────────
 
 function BreaksTab({ ratings }: { ratings: RatedBreak[] }) {
   const groups: RegionGroup[] = useMemo(() => {
@@ -191,10 +215,8 @@ function BreaksTab({ ratings }: { ratings: RatedBreak[] }) {
     <>
       {groups.map(({ region, items }) => (
         <View key={region}>
-          {/* Region header */}
           <View style={styles.regionRow}>
             <Text style={styles.regionLabel}>{region.toUpperCase()} · {items.length}</Text>
-            <View style={styles.regionRule} />
           </View>
           {items.map((item, idx) => (
             <BreakRow key={item.break_id} item={item} rank={idx + 1} />
@@ -205,15 +227,11 @@ function BreaksTab({ ratings }: { ratings: RatedBreak[] }) {
   )
 }
 
-// ─── Wishlist tab content ─────────────────────────────────────────────────────
+// ─── Wishlist tab ─────────────────────────────────────────────────────────────
 
 function WishlistTab({ items }: { items: WishlistBreak[] }) {
   if (items.length === 0) {
-    return (
-      <Text style={styles.emptyTabText}>
-        Your wishlist is empty. Add breaks from the map.
-      </Text>
-    )
+    return <Text style={styles.emptyTabText}>Your wishlist is empty. Add breaks from the map.</Text>
   }
   return (
     <>
@@ -223,17 +241,17 @@ function WishlistTab({ items }: { items: WishlistBreak[] }) {
         return (
           <TouchableOpacity
             key={item.break_id}
-            style={styles.wishRow}
-            activeOpacity={0.75}
+            style={styles.breakRow}
+            activeOpacity={0.6}
             onPress={() => router.push({ pathname: '/break-detail', params: { id: item.break_id, name: b.name } })}
           >
-            <Text style={styles.wishNum}>{idx + 1}</Text>
-            <View style={styles.wishInfo}>
-              <Text style={styles.wishName}>{b.name}</Text>
-              <Text style={styles.wishLoc}>{regionFromLatLng(b.lat, b.lng)}</Text>
-              <View style={styles.wishPills}>
-                {b.type && <Pill label={b.type} bg="#EEEDFE" color="#534AB7" />}
-                {b.direction && <Pill label={b.direction} bg="#E1F5EE" color="#0F6E56" />}
+            <Text style={[styles.breakRank]}>{idx + 1}</Text>
+            <View style={styles.breakInfo}>
+              <Text style={styles.breakName}>{b.name}</Text>
+              <Text style={styles.breakRegion}>{regionFromLatLng(b.lat, b.lng)}</Text>
+              <View style={styles.breakPills}>
+                {b.type && <Pill label={b.type} bg="rgba(83,74,183,0.2)" color="#9B95E8" />}
+                {b.direction && <Pill label={b.direction} bg="rgba(15,110,86,0.2)" color="#3CC4C4" />}
               </View>
             </View>
           </TouchableOpacity>
@@ -245,6 +263,7 @@ function WishlistTab({ items }: { items: WishlistBreak[] }) {
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
+const TABS: TabKey[] = ['breaks', 'wishlist']
 type TabKey = 'breaks' | 'wishlist'
 
 export default function ProfileScreen() {
@@ -256,23 +275,33 @@ export default function ProfileScreen() {
   const [loading, setLoading]             = useState(true)
   const [activeTab, setActiveTab]         = useState<TabKey>('breaks')
 
-  // Profile data
-  const [profile,       setProfile]       = useState<Profile | null>(null)
-  const [surfCount,     setSurfCount]      = useState(0)
-  const [breakCount,    setBreakCount]     = useState(0)
-  const [countryCount,  setCountryCount]  = useState(0)
-  const [followerCount, setFollowerCount] = useState(0)
-  const [followingCount, setFollowingCount] = useState(0)
-  const [ratings,       setRatings]       = useState<RatedBreak[]>([])
-  const [wishlist,      setWishlist]       = useState<WishlistBreak[]>([])
-  const [isFollowing,   setIsFollowing]   = useState(false)
-  const [followLoading, setFollowLoading] = useState(false)
+  const [profile,        setProfile]       = useState<Profile | null>(null)
+  const [surfCount,      setSurfCount]     = useState(0)
+  const [breakCount,     setBreakCount]    = useState(0)
+  const [countryCount,   setCountryCount]  = useState(0)
+  const [followerCount,  setFollowerCount] = useState(0)
+  const [followingCount, setFollowingCount]= useState(0)
+  const [ratings,        setRatings]       = useState<RatedBreak[]>([])
+  const [wishlist,       setWishlist]      = useState<WishlistBreak[]>([])
+  const [isFollowing,    setIsFollowing]   = useState(false)
+  const [followLoading,  setFollowLoading] = useState(false)
 
-  // ─── Resolve target user ──────────────────────────────────────────────────
+  // Tab sliding indicator
+  const [tabContainerWidth, setTabContainerWidth] = useState(0)
+  const indicatorAnim = useRef(new Animated.Value(0)).current
 
   useEffect(() => {
-    resolveAndFetch()
-  }, [params.userId])
+    if (tabContainerWidth === 0) return
+    const tabWidth = tabContainerWidth / TABS.length
+    Animated.spring(indicatorAnim, {
+      toValue: TABS.indexOf(activeTab) * tabWidth,
+      useNativeDriver: true,
+      tension: 80,
+      friction: 12,
+    }).start()
+  }, [activeTab, tabContainerWidth])
+
+  useEffect(() => { resolveAndFetch() }, [params.userId])
 
   async function resolveAndFetch() {
     setLoading(true)
@@ -280,18 +309,13 @@ export default function ProfileScreen() {
     const selfId = session?.user?.id ?? null
     setCurrentUserId(selfId)
 
-    const targetId = params.userId && params.userId !== selfId
-      ? params.userId
-      : selfId
-
+    const targetId = params.userId && params.userId !== selfId ? params.userId : selfId
     const own = !params.userId || params.userId === selfId
     setIsOwnProfile(own)
 
     if (!targetId) { setLoading(false); return }
     await fetchAll(targetId, selfId, own)
   }
-
-  // ─── Data fetch ───────────────────────────────────────────────────────────
 
   async function fetchAll(targetId: string, selfId: string | null, own: boolean) {
     try {
@@ -303,41 +327,21 @@ export default function ProfileScreen() {
         { count: followerCnt },
         { count: followingCnt },
       ] = await Promise.all([
-        supabase.from('profiles')
-          .select('username, display_name, bio')
-          .eq('id', targetId)
-          .single(),
-
-        supabase.from('sessions')
-          .select('break_id, rating')
-          .eq('user_id', targetId),
-
-        supabase.from('break_ratings')
-          .select('break_id, rating, approx_sessions, is_favorite, breaks(name, lat, lng, type, direction)')
-          .eq('user_id', targetId),
-
-        supabase.from('wishlist')
-          .select('break_id, breaks(name, lat, lng, type, direction)')
-          .eq('user_id', targetId),
-
-        supabase.from('follows')
-          .select('*', { count: 'exact', head: true })
-          .eq('following_id', targetId),
-
-        supabase.from('follows')
-          .select('*', { count: 'exact', head: true })
-          .eq('follower_id', targetId),
+        supabase.from('profiles').select('username, display_name, bio, created_at').eq('id', targetId).single(),
+        supabase.from('sessions').select('break_id, rating').eq('user_id', targetId),
+        supabase.from('break_ratings').select('break_id, rating, approx_sessions, is_favorite, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
+        supabase.from('wishlist').select('break_id, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetId),
+        supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetId),
       ])
 
       if (profileData) setProfile(profileData as Profile)
 
-      // Session stats
       const sessions = (sessionData ?? []) as Array<{ break_id: string; rating: number | null }>
       setSurfCount(sessions.length)
       const distinctBreaks = new Set(sessions.map(s => s.break_id).filter(Boolean))
       setBreakCount(distinctBreaks.size)
 
-      // Build per-break session count + avg rating
       const sessionCountMap = new Map<string, number>()
       const sessionRatingSumMap = new Map<string, number>()
       const sessionRatingCountMap = new Map<string, number>()
@@ -350,7 +354,6 @@ export default function ProfileScreen() {
         }
       }
 
-      // Countries: distinct regions derived from rated break lat/lng
       const ratedRows = ((ratingData ?? []) as unknown as RatedBreak[]).map(r => {
         const count = sessionCountMap.get(r.break_id) ?? 0
         const rCount = sessionRatingCountMap.get(r.break_id) ?? 0
@@ -361,21 +364,18 @@ export default function ProfileScreen() {
           avgSessionRating: count >= 3 && rCount > 0 ? rSum / rCount : null,
         }
       })
+
       const regions = new Set(ratedRows.map(r => r.breaks ? regionFromLatLng(r.breaks.lat, r.breaks.lng) : null).filter(Boolean))
       setCountryCount(regions.size || Math.ceil(distinctBreaks.size / 3) || 0)
-
       setRatings(ratedRows)
       setWishlist((wishlistData ?? []) as unknown as WishlistBreak[])
       setFollowerCount(followerCnt ?? 0)
       setFollowingCount(followingCnt ?? 0)
 
-      // Check if self is following this user (other profile only)
       if (!own && selfId) {
         const { data: followRow } = await supabase
-          .from('follows')
-          .select('id')
-          .eq('follower_id', selfId)
-          .eq('following_id', targetId)
+          .from('follows').select('id')
+          .eq('follower_id', selfId).eq('following_id', targetId)
           .maybeSingle()
         setIsFollowing(!!followRow)
       }
@@ -384,93 +384,88 @@ export default function ProfileScreen() {
     }
   }
 
-  // ─── Follow toggle ────────────────────────────────────────────────────────
-
   async function toggleFollow() {
     if (!currentUserId || !params.userId) return
     setFollowLoading(true)
     const targetId = params.userId
-
     if (isFollowing) {
-      await supabase.from('follows')
-        .delete()
-        .eq('follower_id', currentUserId)
-        .eq('following_id', targetId)
+      await supabase.from('follows').delete().eq('follower_id', currentUserId).eq('following_id', targetId)
       setIsFollowing(false)
       setFollowerCount(c => Math.max(0, c - 1))
     } else {
-      await supabase.from('follows')
-        .insert({ follower_id: currentUserId, following_id: targetId })
+      await supabase.from('follows').insert({ follower_id: currentUserId, following_id: targetId })
       setIsFollowing(true)
       setFollowerCount(c => c + 1)
     }
     setFollowLoading(false)
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────
-
   const username    = profile?.username    ?? ''
   const displayName = profile?.display_name ?? username
   const initial     = displayName.charAt(0).toUpperCase() || '?'
+  const tabWidth    = tabContainerWidth > 0 ? tabContainerWidth / TABS.length : 0
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F5EDE0" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0B2230" />
 
-      {/* Header */}
-      <View style={styles.header}>
-        {isOwnProfile ? (
-          <>
-            <Text style={styles.headerTitle}>Profile</Text>
-            <TouchableOpacity
-              onPress={() => Alert.alert('Coming soon', 'Settings coming soon')}
-              hitSlop={10}
-            >
-              <Ionicons name="settings-outline" size={22} color="#1B7A87" />
-            </TouchableOpacity>
-          </>
+      {/* ── Top bar ── */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 10 }]}>
+        {/* Left: back button or settings */}
+        {!isOwnProfile ? (
+          <TouchableOpacity style={styles.topBarSide} onPress={() => router.back()} hitSlop={8}>
+            <Ionicons name="chevron-back" size={20} color="#E8D5B8" />
+          </TouchableOpacity>
         ) : (
-          <>
-            <TouchableOpacity
-              style={styles.backBtn}
-              onPress={() => router.back()}
-              hitSlop={8}
-            >
-              <Ionicons name="chevron-back" size={18} color="#1B7A87" />
-            </TouchableOpacity>
-            <Text style={styles.headerTitleCentered} numberOfLines={1}>
-              {displayName || 'Profile'}
-            </Text>
-            <View style={{ width: 34 }} />
-          </>
+          <View style={styles.topBarSide} />
+        )}
+
+        <LineupsWordmark />
+
+        {/* Right: settings (own) or empty */}
+        {isOwnProfile ? (
+          <TouchableOpacity
+            style={[styles.topBarSide, { alignItems: 'flex-end' }]}
+            onPress={() => Alert.alert('Coming soon', 'Settings coming soon')}
+            hitSlop={10}
+          >
+            <Ionicons name="settings-outline" size={20} color="#E8D5B8" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.topBarSide} />
         )}
       </View>
 
       {loading ? (
         <View style={styles.loader}>
-          <ActivityIndicator size="large" color="#1B7A87" />
+          <ActivityIndicator size="large" color="#3CC4C4" />
         </View>
       ) : (
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
         >
-          {/* ── Card section (sand background) ── */}
+          {/* ── Profile card ── */}
           <View style={styles.card}>
 
-            {/* Avatar + stats */}
+            {/* Username — centered above stats */}
+            {!!username && (
+              <Text style={styles.usernameTag}>{username}</Text>
+            )}
+
+            {/* Avatar + name column alongside stats */}
             <View style={styles.avatarStatsRow}>
-              <View style={[
-                styles.avatarCircle,
-                { backgroundColor: isOwnProfile ? '#1B7A87' : avatarColor(username) },
-              ]}>
-                <Text style={styles.avatarInitial}>{initial}</Text>
+              <View style={styles.avatarColumn}>
+                <View style={[styles.avatarCircle, { backgroundColor: isOwnProfile ? '#1B7A87' : avatarColor(username) }]}>
+                  <Text style={styles.avatarInitial}>{initial}</Text>
+                </View>
+                <Text style={styles.displayName} numberOfLines={2}>{displayName}</Text>
               </View>
               <View style={styles.statsRow}>
                 {([
                   { value: surfCount,    label: 'SURFS' },
                   { value: breakCount,   label: 'BREAKS' },
-                  { value: countryCount, label: 'COUNTRIES' },
+                  { value: countryCount, label: 'REGIONS' },
                 ] as const).map(({ value, label }) => (
                   <View key={label} style={styles.statBlock}>
                     <Text style={styles.statValue}>{value}</Text>
@@ -480,21 +475,27 @@ export default function ProfileScreen() {
               </View>
             </View>
 
-            {/* Bio */}
+            {/* Bio + follow counts */}
             <View style={styles.bioSection}>
-              <Text style={styles.displayName}>{displayName}</Text>
               {!!profile?.bio?.trim() && (
                 <Text style={styles.bioText}>{profile.bio.trim()}</Text>
               )}
               <View style={styles.followRow}>
-                <Text style={styles.followText}>
-                  <Text style={styles.followNum}>{followerCount}</Text>
-                  <Text style={styles.followMuted}> followers</Text>
-                </Text>
-                <Text style={styles.followText}>
-                  <Text style={styles.followNum}>{followingCount}</Text>
-                  <Text style={styles.followMuted}> following</Text>
-                </Text>
+                <View style={styles.followLeft}>
+                  <Text style={styles.followMuted}>
+                    <Text style={styles.followNum}>{followerCount}</Text>
+                    {' followers'}
+                  </Text>
+                  <Text style={styles.followMuted}>
+                    <Text style={styles.followNum}>{followingCount}</Text>
+                    {' following'}
+                  </Text>
+                </View>
+                {!!profile?.created_at && (
+                  <Text style={styles.memberSince}>
+                    Member since {new Date(profile.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                  </Text>
+                )}
               </View>
             </View>
 
@@ -505,7 +506,7 @@ export default function ProfileScreen() {
                 onPress={() => Alert.alert('Coming soon', 'Edit profile coming soon')}
                 activeOpacity={0.8}
               >
-                <Text style={styles.editBtnText}>Edit profile</Text>
+                <Text style={styles.editBtnText}>Edit Profile</Text>
               </TouchableOpacity>
             ) : (
               <View style={styles.actionBtns}>
@@ -530,20 +531,28 @@ export default function ProfileScreen() {
             )}
           </View>
 
-          {/* ── Tab bar ── */}
-          <View style={styles.tabBar}>
-            {(['breaks', 'wishlist'] as TabKey[]).map(tab => (
+          {/* ── Tab strip with sliding indicator ── */}
+          <View
+            style={styles.tabStrip}
+            onLayout={e => setTabContainerWidth(e.nativeEvent.layout.width)}
+          >
+            {TABS.map(tab => (
               <TouchableOpacity
                 key={tab}
-                style={[styles.tabItem, activeTab === tab && styles.tabItemActive]}
+                style={styles.tab}
                 onPress={() => setActiveTab(tab)}
-                activeOpacity={0.8}
+                activeOpacity={0.7}
               >
                 <Text style={[styles.tabLabel, activeTab === tab && styles.tabLabelActive]}>
                   {tab.charAt(0).toUpperCase() + tab.slice(1)}
                 </Text>
               </TouchableOpacity>
             ))}
+            {tabWidth > 0 && (
+              <Animated.View
+                style={[styles.tabIndicator, { width: tabWidth, transform: [{ translateX: indicatorAnim }] }]}
+              />
+            )}
           </View>
 
           {/* ── Tab content ── */}
@@ -554,17 +563,19 @@ export default function ProfileScreen() {
             }
           </View>
 
-          {/* ── Sign out (temporary, for testing) ── */}
-          <TouchableOpacity
-            style={styles.signOutButton}
-            activeOpacity={0.7}
-            onPress={async () => {
-              await supabase.auth.signOut()
-              router.replace('/(auth)/login')
-            }}
-          >
-            <Text style={styles.signOutText}>Sign out</Text>
-          </TouchableOpacity>
+          {/* ── Sign out ── */}
+          {isOwnProfile && (
+            <TouchableOpacity
+              style={styles.signOutButton}
+              activeOpacity={0.7}
+              onPress={async () => {
+                await supabase.auth.signOut()
+                router.replace('/(auth)/login')
+              }}
+            >
+              <Text style={styles.signOutText}>Sign out</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       )}
     </View>
@@ -576,38 +587,19 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5EDE0',
+    backgroundColor: '#0B2230',
   },
 
-  // Header
-  header: {
+  // Top bar
+  topBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#D8C8B0',
-    backgroundColor: '#F5EDE0',
+    paddingHorizontal: 20,
+    paddingBottom: 8,
   },
-  headerTitle: {
-    fontFamily: 'Georgia',
-    fontWeight: '700',
-    fontSize: 24,
-    color: '#2A1A08',
-  },
-  headerTitleCentered: {
-    fontFamily: 'Georgia',
-    fontWeight: '700',
-    fontSize: 20,
-    color: '#2A1A08',
-    flex: 1,
-    textAlign: 'center',
-  },
-  backBtn: {
-    width: 34,
-    height: 34,
-    alignItems: 'flex-start',
+  topBarSide: {
+    width: 80,
     justifyContent: 'center',
   },
 
@@ -617,33 +609,42 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  // Profile card area (sand bg)
+  // Profile card
   card: {
-    backgroundColor: '#F2E8D8',
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 4,
+    backgroundColor: '#0F2838',
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 6,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.3)',
   },
 
   // Avatar + stats
   avatarStatsRow: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 16,
+    marginBottom: 14,
+  },
+  avatarColumn: {
     alignItems: 'center',
-    gap: 14,
-    marginBottom: 10,
+    gap: 8,
+    width: 90,
+    flexShrink: 0,
+    marginLeft: 14,
+    marginTop: -25,
   },
   avatarCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 83,
+    height: 83,
+    borderRadius: 41.5,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
   },
   avatarInitial: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 22,
+    fontSize: 29,
     color: '#E8D5B8',
   },
   statsRow: {
@@ -657,85 +658,97 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 20,
-    color: '#2A1A08',
+    fontSize: 22,
+    color: '#E8D5B8',
   },
   statLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 9,
-    color: '#A8845A',
-    letterSpacing: 0.8,
+    fontSize: 11,
+    color: '#4A7A87',
+    letterSpacing: 1.2,
     marginTop: 2,
   },
 
   // Bio
   bioSection: {
-    marginBottom: 12,
+    marginBottom: 14,
   },
   displayName: {
     fontFamily: 'Georgia',
+    fontSize: 20,
+    color: '#E8D5B8',
+    textAlign: 'center',
+  },
+  usernameTag: {
+    fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 16,
-    color: '#2A1A08',
-    marginBottom: 2,
+    fontSize: 26,
+    color: '#E8D5B8',
+    textAlign: 'center',
+    marginBottom: 14,
   },
   bioText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 10,
-    color: '#A8845A',
-    lineHeight: 14,
-    marginTop: 2,
+    fontSize: 12,
+    color: '#4A7A87',
+    lineHeight: 17,
     marginBottom: 8,
   },
   followRow: {
     flexDirection: 'row',
-    gap: 16,
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginTop: 6,
   },
-  followText: {
-    fontFamily: 'Helvetica Neue',
-    fontSize: 11,
+  followLeft: {
+    flexDirection: 'row',
+    gap: 16,
   },
   followNum: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#2A1A08',
+    fontWeight: '600',
+    fontSize: 14,
+    color: '#E8D5B8',
   },
   followMuted: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
-    color: '#A8845A',
+    fontSize: 14,
+    color: '#4A7A87',
+  },
+  memberSince: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 14,
+    color: '#4A7A87',
   },
 
-  // Action buttons
+  // Buttons
   editBtn: {
-    backgroundColor: '#EDE0CC',
+    backgroundColor: 'transparent',
     borderWidth: 0.5,
-    borderColor: '#C5A882',
+    borderColor: 'rgba(74,122,135,0.5)',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 16,
   },
   editBtnText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
-    color: '#7A4E2A',
+    fontSize: 13,
+    color: '#E8D5B8',
   },
   actionBtns: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 14,
+    marginBottom: 16,
   },
   followBtn: {
     flex: 1,
-    backgroundColor: '#EDE0CC',
-    borderWidth: 0.5,
-    borderColor: '#1B7A87',
+    borderWidth: 1,
+    borderColor: '#3CC4C4',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   followBtnActive: {
     backgroundColor: '#1B7A87',
@@ -743,158 +756,152 @@ const styles = StyleSheet.create({
   },
   followBtnText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
     fontWeight: '500',
-    color: '#1B7A87',
+    fontSize: 13,
+    color: '#3CC4C4',
   },
   followBtnTextActive: {
     color: '#E8D5B8',
   },
   messageBtn: {
     flex: 1,
-    backgroundColor: '#EDE0CC',
     borderWidth: 0.5,
-    borderColor: '#C5A882',
+    borderColor: 'rgba(74,122,135,0.5)',
     borderRadius: 10,
-    paddingVertical: 10,
+    paddingVertical: 11,
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   messageBtnText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
-    color: '#7A4E2A',
+    fontSize: 13,
+    color: '#E8D5B8',
   },
 
-  // Tab bar
-  tabBar: {
+  // Tab strip
+  tabStrip: {
     flexDirection: 'row',
-    backgroundColor: '#F2E8D8',
+    position: 'relative',
     borderBottomWidth: 0.5,
-    borderBottomColor: '#D8C8B0',
+    borderBottomColor: 'rgba(74,122,135,0.3)',
   },
-  tabItem: {
+  tab: {
     flex: 1,
-    paddingVertical: 11,
     alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  tabItemActive: {
-    borderBottomColor: '#1B7A87',
+    paddingVertical: 13,
   },
   tabLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 10,
-    letterSpacing: 0.5,
-    color: '#A8845A',
+    fontSize: 12,
+    letterSpacing: 0.4,
+    color: '#4A7A87',
   },
   tabLabelActive: {
-    color: '#1B7A87',
+    color: '#E8D5B8',
+    fontWeight: '500',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: -0.5,
+    height: 2,
+    backgroundColor: '#E8D5B8',
+    borderRadius: 1,
   },
 
-  // Tab content wrapper
+  // Tab content
   tabContent: {
     paddingBottom: 8,
   },
+  emptyTabText: {
+    fontFamily: 'Georgia',
+    fontStyle: 'italic',
+    fontSize: 14,
+    color: '#4A7A87',
+    textAlign: 'center',
+    paddingVertical: 32,
+    paddingHorizontal: 20,
+  },
+
+  // Sign out
   signOutButton: {
-    marginHorizontal: 18,
-    marginTop: 24,
-    marginBottom: 24,
+    marginHorizontal: 20,
+    marginTop: 28,
+    marginBottom: 12,
     borderWidth: 0.5,
-    borderColor: '#E24B4A',
+    borderColor: 'rgba(224,112,112,0.5)',
     borderRadius: 10,
-    paddingVertical: 12,
-    backgroundColor: 'transparent',
+    paddingVertical: 13,
     alignItems: 'center',
   },
   signOutText: {
     fontFamily: 'Helvetica Neue',
     fontSize: 13,
-    color: '#E24B4A',
-    textAlign: 'center',
-  },
-
-  // Empty tab state
-  emptyTabText: {
-    fontFamily: 'Georgia',
-    fontStyle: 'italic',
-    fontSize: 14,
-    color: '#A8845A',
-    textAlign: 'center',
-    paddingVertical: 32,
-    paddingHorizontal: 18,
+    color: '#E07070',
   },
 
   // Shared pill
   pill: {
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
   },
   pillText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 8,
-    letterSpacing: 0.4,
+    fontSize: 10,
+    letterSpacing: 0.5,
   },
 
   // Dot rating
   dots: {
     flexDirection: 'row',
-    gap: 2,
+    gap: 4,
     alignItems: 'center',
   },
   dotFilled: {
-    backgroundColor: '#1B7A87',
+    backgroundColor: '#3CC4C4',
   },
   dotEmpty: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#C5A882',
+    borderColor: '#1B5A6A',
   },
 
   // Region header
   regionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 18,
-    paddingTop: 16,
-    paddingBottom: 6,
+    paddingHorizontal: 20,
+    paddingTop: 24,
+    paddingBottom: 8,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.4)',
   },
   regionLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 9,
-    color: '#A8845A',
-    letterSpacing: 2,
-    flexShrink: 0,
-  },
-  regionRule: {
-    flex: 1,
-    height: 0.5,
-    backgroundColor: '#D8C8B0',
+    fontSize: 11,
+    color: '#4A7A87',
+    letterSpacing: 2.4,
   },
 
   // Break row
   breakRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     borderBottomWidth: 0.5,
-    borderBottomColor: '#F0E4D0',
+    borderBottomColor: 'rgba(74,122,135,0.2)',
   },
   breakRank: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 18,
-    color: '#C5A882',
-    width: 22,
+    fontSize: 22,
+    color: '#4A7A87',
+    width: 26,
     textAlign: 'center',
     flexShrink: 0,
   },
   breakRankTop: {
-    color: '#1B7A87',
+    color: '#3CC4C4',
   },
   breakInfo: {
     flex: 1,
@@ -903,89 +910,63 @@ const styles = StyleSheet.create({
   breakName: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 12,
-    color: '#2A1A08',
+    fontSize: 17,
+    color: '#E8D5B8',
     marginBottom: 3,
+  },
+  breakRegion: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#4A7A87',
+    letterSpacing: 0.3,
+    marginBottom: 6,
   },
   breakPills: {
     flexDirection: 'row',
-    gap: 4,
+    gap: 5,
     flexWrap: 'wrap',
   },
   breakRight: {
     alignItems: 'flex-end',
-    gap: 5,
+    gap: 7,
     flexShrink: 0,
   },
   ratingBlock: {
     alignItems: 'flex-end',
-    gap: 2,
+    gap: 4,
   },
   breakRatingLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 7,
-    color: '#A8845A',
+    fontSize: 9,
+    color: '#4A7A87',
     letterSpacing: 1,
   },
   sessionStatsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 6,
   },
   sessionStatText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 8,
-    color: '#A8845A',
+    fontSize: 10,
+    color: '#4A7A87',
   },
   sessionAvgText: {
     fontFamily: 'Helvetica Neue',
     fontWeight: '500',
-    fontSize: 8,
-    color: '#1B7A87',
+    fontSize: 10,
+    color: '#3CC4C4',
   },
-  favDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
-    backgroundColor: '#7F77DD',
+  favPill: {
+    backgroundColor: 'rgba(127,119,221,0.15)',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
   },
-
-  // Wishlist row
-  wishRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: '#F0E4D0',
-  },
-  wishNum: {
+  favPillText: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 9,
-    color: '#C5A882',
-    width: 18,
-    marginTop: 2,
-  },
-  wishInfo: {
-    flex: 1,
-  },
-  wishName: {
-    fontFamily: 'Georgia',
-    fontWeight: '700',
-    fontSize: 12,
-    color: '#2A1A08',
-    marginBottom: 2,
-  },
-  wishLoc: {
-    fontFamily: 'Helvetica Neue',
-    fontSize: 9,
-    color: '#A8845A',
-    marginBottom: 3,
-  },
-  wishPills: {
-    flexDirection: 'row',
-    gap: 4,
-    flexWrap: 'wrap',
+    fontSize: 10,
+    color: '#7F77DD',
+    letterSpacing: 0.3,
   },
 })
