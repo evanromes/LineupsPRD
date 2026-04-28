@@ -34,7 +34,9 @@ export default function RootLayout() {
       <Stack.Screen
         name="log-session"
         options={{
-          presentation: 'modal',
+          presentation: 'transparentModal',
+          cardStyle: { backgroundColor: 'transparent' },
+          cardOverlayEnabled: false,
           animation: 'slide_from_bottom',
         }}
       />

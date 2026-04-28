@@ -11,13 +11,18 @@ import Svg, { Ellipse, Line, Path } from 'react-native-svg'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 
-type BoardValue = 'shortboard' | 'longboard' | 'mid-length' | 'sup' | 'foil' | null
+type BoardValue = 'shortboard' | 'longboard' | 'mid-length' | 'gun' | 'sup' | 'foil' | null
 
 const OPTIONS: { value: BoardValue; label: string; description?: string }[] = [
   { value: 'shortboard', label: 'Shortboard' },
   { value: 'mid-length', label: 'Mid-Length' },
-  { value: 'longboard', label: 'Longboard' },
-  { value: 'sup', label: 'SUP' },
+  { value: 'longboard',  label: 'Longboard'  },
+  {
+    value: 'gun',
+    label: 'Gun',
+    description: "For big-wave days — paddles fast and holds in steep, powerful surf",
+  },
+  { value: 'sup',  label: 'SUP'  },
   { value: 'foil', label: 'Foil' },
   {
     value: null,
@@ -81,6 +86,27 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
           strokeWidth={0.75}
           opacity={selected ? 0.4 : 1}
         />
+      </Svg>
+    )
+  }
+  if (value === 'gun') {
+    return (
+      <Svg width={32} height={60} viewBox="0 0 64 104">
+        <Path
+          d="M 32 8 Q 26 25 25 50 Q 25 75 30 90 Q 32 92 34 90 Q 39 75 39 50 Q 38 25 32 8 Z"
+          fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
+          stroke={selected ? '#3CC4C4' : 'rgba(197,168,130,0.5)'}
+          strokeWidth={selected ? 1.5 : 1}
+        />
+        {selected && (
+          <Path
+            d="M 32 22 Q 31 40 31 51 Q 31 65 32 78"
+            stroke="#3CC4C4"
+            strokeWidth={0.75}
+            opacity={0.4}
+            fill="none"
+          />
+        )}
       </Svg>
     )
   }
