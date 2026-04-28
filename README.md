@@ -20,125 +20,42 @@ Lineups is a surf session tracking app. Users log surf sessions, rate breaks, an
 
 ## Theming Architecture
 
-Lineups supports **light and dark mode** with a user-controlled toggle (defaults to system preference). The infrastructure is set up and ready — screens are migrated to it incrementally as functionality stabilises.
-
-### How it works
-
-```
-constants/colors.ts      — semantic color token objects (darkTheme, lightTheme, brand)
-context/ThemeContext.tsx  — React Context, toggle function, AsyncStorage persistence
-```
-
-The user's preference is persisted to `AsyncStorage` under the key `@lineups_theme`. On first launch it defaults to the device system preference (`useColorScheme()`).
-
-### Token structure (`constants/colors.ts`)
-
-Each theme exports an object with identical keys but different values:
-
-| Token | Dark value | Light value |
-|---|---|---|
-| `background` | `#0B2230` | `#F5EDE0` |
-| `cardBackground` | `#0F2838` | `#EDE0CC` |
-| `titleText` | `#E8D5B8` | `#2A1A08` |
-| `subtext` | `#4A7A87` | `#A8845A` |
-| `borderPrimary` | `#E8D5B8` | `#C5A882` |
-| `placeholder` | `#4A7A87` | `#C5A882` |
-| `ctaBackground` | `#1B7A87` | `#1B7A87` |
-| `followBorder/Text` | `#3CC4C4` | `#1B7A87` |
-| `typePillBackground` | `rgba(83,74,183,0.2)` | `#EEEDFE` |
-| `dirPillBackground` | `rgba(15,110,86,0.2)` | `#E1F5EE` |
-
-A separate `brand` object holds colors that never change between themes (`teal`, `aqua`, `cream`, `purple`, etc.).
-
-### Using the theme in a component
-
-```tsx
-import { useTheme } from '../context/ThemeContext'
-import { StyleSheet } from 'react-native'
-import type { Theme } from '../constants/colors'
-
-export default function MyScreen() {
-  const { theme } = useTheme()
-  const styles = getStyles(theme)
-
-  return <View style={styles.container} />
-}
-
-function getStyles(theme: Theme) {
-  return StyleSheet.create({
-    container: { backgroundColor: theme.background },
-    title: { color: theme.titleText },
-  })
-}
-```
-
-The key pattern: **replace `StyleSheet.create({...})` at module scope with a `getStyles(theme)` function called inside the component**, so styles are recomputed when the theme changes.
-
-### Wiring the provider
-
-`ThemeProvider` needs to wrap the root of the app in `app/_layout.tsx` (or equivalent):
-
-```tsx
-import { ThemeProvider } from '../context/ThemeContext'
-
-export default function RootLayout() {
-  return (
-    <ThemeProvider>
-      {/* rest of app */}
-    </ThemeProvider>
-  )
-}
-```
-
-### Toggle UI
-
-A toggle switch (to be added to the Profile screen settings) calls:
-```tsx
-const { toggleTheme, themeType } = useTheme()
-// themeType is 'light' | 'dark'
-```
-
-### Migration status
-
-Screens are migrated to theme tokens incrementally. Until a screen is migrated, it uses hardcoded hex strings and will not respond to the toggle.
-
-| Screen | Migrated |
-|---|---|
-| All onboarding screens | — pending |
-| Tab screens (map, feed, journal, breaks, profile) | — pending |
-
----
-
-## Design System
+Lineups uses a **dark navy** theme throughout. The infrastructure for a user-controlled light/dark toggle exists but screens are migrated incrementally.
 
 ### Color Palette (Reef)
 | Token | Hex | Usage |
 |---|---|---|
 | Teal | `#1B7A87` | Primary CTAs, active nav, filled buttons |
-| Deep Teal | `#0F5A65` | Hover states, icon inner block |
-| Aqua | `#3CC4C4` | Visited pins, active elements, selected states |
-| Cream | `#E8D5B8` | Text on dark backgrounds |
-| Sand | `#C5A882` | Borders, secondary text |
+| Deep Teal | `#0F5A65` | Hover states |
+| Aqua | `#3CC4C4` | Active elements, selected states, slider/dot fill |
+| Cream | `#E8D5B8` | Primary text on dark backgrounds |
+| Sand | `#C5A882` | Borders, secondary text, wind chip accent |
 | Dark Brown | `#2A1A08` | Body text on light screens |
 | Navy | `#0B2230` | Dark screen backgrounds, map |
+| Card Navy | `#0F2838` | Card/sheet backgrounds |
 | Purple | `#7F77DD` | Favourite pins, favourite indicators |
+| Purple Tint | `rgba(83,74,183,0.2)` / `#9B95E8` | Break type pills, crowd factor chips |
+| Green Tint | `rgba(15,110,86,0.2)` / `#3CC4C4` | Wave direction pills |
 
 ### Typography
-- **Display / headings:** Georgia, bold — `fontSize: 38` for primary titles
+- **Display / headings:** Georgia, bold — `fontSize: 38` for onboarding, `26–34` for session flow
 - **UI / body:** Helvetica Neue, light (300) and regular (400/500)
-- **Section labels:** Helvetica Neue 300, `fontSize: 9–10`, `letterSpacing: 2`, uppercase
+- **Section labels:** Helvetica Neue 300, `fontSize: 9–11`, `letterSpacing: 1.5–2`, uppercase
 
 ### Screen Themes
-- **Dark screens** (onboarding steps 1–6): `#0B2230` background, `#E8D5B8` text, `#4A7A87` subtext
-- **Light screens** (social steps, feed, profile): `#F5EDE0` background, `#2A1A08` text, `#A8845A` subtext
-- The onboarding flow starts dark and transitions to warm sand at the contacts/friends step.
+- **Dark screens** (all tab screens, session logging, onboarding steps 1–6): `#0B2230` background, `#E8D5B8` text, `#4A7A87` subtext
+- **Onboarding social steps** (contacts, friends): warm sand — transitions from dark to light mid-flow
 
-### Progress Dots
-- Total: 5 dots
-- Inactive: 9×9px, `#D8C8B0`
-- Done: 9×9px, `#3CC4C4`
-- Active: 24×9px pill, `#1B7A87`
-- Gap: 6px between dots
+---
+
+## Navigation Tabs (5)
+
+```
+Feed → Breaks → Map → Journal → Profile
+```
+
+Tab bar: `#060F14` bg, `#3CC4C4` active, `#2A5A65` inactive, height 80.
+Breaks tab uses a custom SVG wave icon (two wave Bezier paths).
 
 ---
 
@@ -161,87 +78,253 @@ Supabase email/password auth. On success, routes to `/onboarding/profile`.
 
 #### 3. `onboarding/profile.tsx` — *"What's your name?"* + *"Choose a username"*
 Two sub-steps within a single file, controlled by `step: 1 | 2` state.
-
-- **Step 1:** First name + last name inputs. 92×92px avatar circle with `+` badge (photo picker via `expo-image-picker`).
-- **Step 2:** Username field with `@` prefix, real-time availability check (debounced 400ms), `available` / `taken` / `checking` indicator.
-- Saves `display_name`, `username`, and `email` to `profiles` on completion.
-- Routes to `/onboarding/stance`.
-
-**Decision:** Email is stored on the profile (not just in `auth.users`) so it can be used for contacts matching on the friends screen without requiring a server-side function.
+- **Step 1:** First name + last name inputs. 92×92px avatar circle with `+` badge.
+- **Step 2:** Username field with real-time availability check (debounced 400ms).
+- Saves `display_name`, `username`, `email` to `profiles`.
 
 #### 4. `onboarding/stance.tsx` — *"What's your experience level?"*
-Four option cards: **Beginner / Intermediate / Advanced / Pro**. Radio button selection. Saves `experience_level` to `profiles`. Routes to `/onboarding/stance-screen`.
+Four option cards: **Beginner / Intermediate / Advanced / Pro**. Saves `experience_level`.
 
 #### 5. `onboarding/stance-screen.tsx` — *"What's your stance?"*
-Three option cards: **Regular / Goofy / N/A**. `null` is a valid selection (N/A — surfs both or no preference). Saves `stance` to `profiles`. Routes to `/onboarding/board`.
-
-**Decision:** `undefined` = nothing chosen yet (button disabled); `null` = N/A explicitly selected (button enabled). This avoids treating N/A as an unset state.
+Three option cards: **Regular / Goofy / N/A**. `null` = N/A (valid selection). Saves `stance`.
 
 #### 6. `onboarding/board.tsx` — *"What's your board of choice?"*
-Six option cards: **Shortboard / Mid-Length / Longboard / SUP / Foil / N/A**. Each card includes a custom SVG board silhouette icon (see `BoardIcon` component). Saves `preferred_board` to `profiles`. Routes to `/onboarding/homebreak`.
+Seven option cards with SVG board silhouette icons:
 
-**Decision:** N/A means "rides multiple boards or no preference" — stored as `null`, not hidden.
+| Option | Value | Icon |
+|---|---|---|
+| Shortboard | `shortboard` | Narrow ellipse |
+| Mid-Length | `mid-length` | Medium ellipse with stringer |
+| Longboard | `longboard` | Wide tall ellipse with stringer |
+| Gun | `gun` | Pointed teardrop path — for big-wave days |
+| SUP | `sup` | Wide ellipse + paddle line |
+| Foil | `foil` | Short ellipse + mast + wings |
+| N/A | `null` | No icon |
+
+**Decision:** Gun added between Longboard and SUP. Description: *"For big-wave days — paddles fast and holds in steep, powerful surf."* Stored as `"gun"` in `profiles.preferred_board`.
+
+Card style: unselected `rgba(42,26,8,0.35)` bg / `rgba(197,168,130,0.4)` border / `#C5A882` label. Selected `#0F4E63` bg / `#3CC4C4` border / `#3CC4C4` label. Radio button right-aligned.
+
+Saves `preferred_board` to `profiles`. Routes to `/onboarding/homebreak`.
 
 #### 7. `onboarding/homebreak.tsx` — *"What's your home break?"*
-Debounced search (300ms) with two parallel queries:
-- `.ilike('name', '%term%')` — name match
-- `.ilike('region', '%term%')` — region match (e.g. typing "Fiji" surfaces Cloudbreak, Restaurants, Swimming Pools, etc.)
+Debounced search (300ms) across `name` and `region` columns. Saves `home_break` as break name string.
 
-Results are merged and deduplicated by `id`. Selecting a break shows a card with the break name, region subtext, and type/direction pills stacked on the right. Saves `home_break` (break name string) to `profiles`. Routes to `/onboarding/contacts`.
-
-**Decision:** Home break is stored as the break's name string (not a foreign key) so it remains human-readable on the profile even if the break record changes.
-
-#### 8. `onboarding/contacts.tsx` — *"Discover your friends already on Lineups"*
-Requests `expo-contacts` permission. Two buttons:
-
-- **Allow Contacts** — calls `Contacts.requestPermissionsAsync()`, then routes to `/onboarding/friends`.
-- **Not now** — triggers a confirmation modal: *"Lineups is more fun when you follow your friends and see where they're surfing. Are you sure you want to skip this step?"* with **Allow Contacts** (dismisses modal) and **Skip anyway** (routes to friends).
-
-**Decision:** The confirmation step exists to reduce accidental skips — contacts matching significantly improves the friends discovery experience.
-
-**iOS config required** — add to `app.json` under `expo.ios.infoPlist`:
-```json
-"NSContactsUsageDescription": "Lineups uses your contacts to help you find friends already on the app."
-```
+#### 8. `onboarding/contacts.tsx`
+Contacts permission request with skip confirmation modal.
 
 #### 9. `onboarding/friends.tsx` — *"Find your crew"*
-Three prioritized sections, loaded on mount in parallel:
-
-| Section | Label | Logic |
-|---|---|---|
-| 1 | FROM YOUR CONTACTS | Reads device contacts emails via `expo-contacts`, queries `profiles.email`. Only shown if contacts permission was granted. |
-| 2 | SURFERS NEAR YOUR HOME BREAK | Looks up current user's `home_break` → fetches its `region` from `breaks` table → finds all other profiles with a `home_break` in the same region. Excludes anyone in section 1. |
-| 3 | SUGGESTED | Recent signups, excluding anyone shown above. |
-
-Search (name or username) overlays the sections with a flat list. Follow/unfollow state is tracked in a single `Map` shared across all sections — changes reflect instantly everywhere.
+Three prioritized sections: contacts matches → home break region → suggested.
 
 #### 10. `onboarding/history.tsx` — *"Log your surf history"*
-Displays breaks organized into **region sections**, with the user's home break region shown first. Other regions are sorted alphabetically; breaks with no region go into "Other" at the bottom.
-
-Search bar supports both **name and region search** — runs two parallel queries (`.ilike('name', ...)` and lat/lng bounds matching via `REGIONS` bounds table) and merges results.
-
-Break rating popup (bottom sheet) includes:
-- Break name + region subtext
-- "MY RATING" label with a live descriptor that updates as dots are selected: *Not worth it / Mediocre / Decent spot / Really good / Epic*
-- "Mark as favourite" checkbox (purple fill when active)
-
-After rating, the break card shows:
-- Inline teal rating dots
-- A purple dot + "Favourite" label if marked as favourite
+Region-grouped break list. Rating popup with 5 dot rating + "Mark as favourite" + `🏄 Favorite` pill on rated breaks.
 
 #### 11. `onboarding/done.tsx`
-Completion screen. Routes to the main app tab navigator.
+Routes to main tab navigator.
+
+### Progress Dots (onboarding)
+- Total: 5 dots
+- Inactive: 9×9px, `#1B5A6A`
+- Done: 9×9px, `#3CC4C4`
+- Active: 23×9px pill, `#E8D5B8` (dark screens) / `#1B7A87` (light screens)
 
 ---
 
-## Database Changes
+## Session Logging Flow
 
-Two migrations are required beyond the initial schema. Both scripts live in `scripts/`.
+Accessed via **"Log session"** on the map callout (for rated breaks) or after **"Rate break"** on unrated breaks.
 
-### `scripts/add-region-column.sql`
-Adds a `region TEXT` column to the `breaks` table and backfills it for all seeded breaks using `CASE WHEN` lat/lng bounds.
+### Rate Break → Log Session (map)
 
-| Region | Lat range | Lng range |
+When a user taps a pin on the map:
+- **Unrated break** → callout shows **"Rate break"** button
+- **Rated break** → callout shows **"Log session"** button
+
+**Rate Break modal** (dark bottom sheet, slides up from map):
+- Step 1: Break name + *"What would you rate this break out of 5?"* (31px Georgia bold, cream) + 5 teal dot rating + "Mark as favorite" toggle card (dark navy) + Next / Cancel
+- Step 2: *"Would you like to log your session?"* + **"Yes, log session →"** (saves rating, awaits Supabase write, then navigates to log-session) + **"No thanks"** (saves rating only)
+
+**Decision:** Rating is saved to `break_ratings` and awaited before navigating, so `log-session` always finds the record and correctly skips the break rating step.
+
+### Log Session Screen (`app/log-session.tsx`)
+
+Presented as `transparentModal` with `cardStyle: { backgroundColor: 'transparent' }` so the map is visible behind bottom-sheet steps.
+
+**5 steps total.** Progress: 5 dots (dot 1 pre-filled for returning visitors).
+
+---
+
+#### Step 1 — Rate the Break *(first visit only)*
+Full-screen dark navy. Shown only when no `break_ratings` record exists for this break.
+- Break name context line (italic teal)
+- *"How would you rate this break?"* heading
+- 5 × 44px dot rating (teal filled / `#1B5A6A` empty border)
+- Descriptor label (Not worth it → Epic)
+- "Mark as a favorite" toggle card (`#0F2838` bg)
+- Next → / Skip
+
+**Decision:** Returning visitors (`isFirstVisit === false`) start at step 2; dot 1 is shown as done.
+
+---
+
+#### Step 2 — How was your surf? *(half-screen bottom sheet)*
+Transparent outer + `#0F2838` sheet rising to **52% of screen height**. Map visible above.
+- Date context line (italic teal, 21px)
+- *"How was your surf?"* heading (34px Georgia bold, cream)
+- Session count line for returning visitors (italic teal, 14px)
+- **Horizontal drag slider 1–10:** draggable thumb + tappable number labels below. Initialized at **5**. Track fill teal, empty track `#1B3A45`. Numbers 1–10 shown below; active number highlighted teal bold (13px).
+- Descriptor label (Rough one → One for the books, italic teal, 21px)
+- Next → (disabled/greyed until rating selected) / Cancel (exits flow)
+
+**Decision:** Rating required to advance — Next is non-tappable until slider moves. Default value 5 positions the thumb at center on load. Numbers are tappable to jump the slider.
+
+---
+
+#### Step 3 — What board did you ride? *(natural-height bottom sheet)*
+Transparent outer + `#0F2838` sheet sized to content. Map visible above.
+- *"What board did you ride?"* heading
+- 7 board cards (same style as onboarding, slightly compact: 17px label, 28×52px icon)
+- **Inline notes field** appears directly below the selected card (not at bottom of list): `#0B2230` bg, italic Georgia 15px, board-specific placeholder text
+
+| Board | Notes placeholder |
+|---|---|
+| Shortboard | `e.g. 5'8 Al Merrick` |
+| Mid-Length | `e.g. 7'6 Pyzel Mid` |
+| Longboard | `e.g. 9'2 Noserider` |
+| Gun | `e.g. 9'6 Stretch Gun` |
+| SUP | `e.g. 10'6 Race board` |
+| Foil | `e.g. Armstrong CF1200` |
+| Other | `e.g. Mixed quiver` |
+
+**Decision:** N/A renamed to "Other" in the session flow. Board type + notes combined into the `sessions.board` column as `"Shortboard — 5'8 Al Merrick"` on save. Notes field only appears after a board is selected.
+
+---
+
+#### Step 4 — How were the conditions? *(natural-height bottom sheet)*
+Transparent outer + `#0F2838` sheet sized to content. Map visible above.
+- *"How were the conditions?"* heading
+- **SWELL SIZE** — label `#3CC4C4` (teal). Chips: selected `#1B7A87` bg / `#3CC4C4` border / `#E8D5B8` text
+- **WIND** — label `#C5A882` (sand/brown). Chips: inactive `rgba(197,168,130,0.28)` border / `#7A5C42` text; selected `rgba(197,168,130,0.18)` bg / `#C5A882` border + text
+- **CROWD FACTOR** — label `#9B95E8` (purple). Chips: selected `rgba(83,74,183,0.2)` bg / `#534AB7` border / `#9B95E8` text
+- Next → / Skip
+
+**Decision:** Each condition category has a distinct color accent (teal / sand-brown / purple) to visually separate them. SWELL SIZE label color matches its selected chip border.
+
+---
+
+#### Step 5 — Set the Scene *(full-screen dark)*
+Full-screen dark navy with standard header + progress dots.
+- SURFED WITH — text input
+- NOTES — multiline italic text input
+- PHOTOS — horizontal scroll with add button
+- Public/Private toggle (`#1B7A87` on / `#1B3A45` off)
+- Save session CTA
+
+---
+
+### Chip Rows (shared component)
+`ChipRow` accepts `selectedBg`, `selectedBorderColor`, `selectedTextColor`, `inactiveBorderColor`, `inactiveTextColor` — allowing per-section color theming without separate components.
+
+---
+
+## My Breaks Page (`app/(tabs)/breaks.tsx`)
+
+### Layout
+- **Top bar:** username (left, `#E8D5B8`, 14px) | Lineups wordmark (center) | share icon (right)
+- **Tabs:** Visited / Favorites / Wishlist / All — sliding underline indicator (Animated spring)
+- **Search bar:** searches by break name OR region
+- **Filter button:** opens bottom sheet; teal tint + badge count when active
+
+### Break Rows
+Flat rows (no card chrome), separated by `borderBottomWidth: 0.5` lines.
+- Rank: 22px Georgia bold cream
+- Break name: 17px Georgia bold cream
+- Region subtext: 12px Helvetica teal
+- Rating dots: 9×9px teal/empty
+- `🏄 Favorite` pill: `rgba(127,119,221,0.15)` bg, `#7F77DD` text (shown instead of purple dot)
+
+### Filter Sheet
+- **Min rating:** 5 interactive 22px dots (tap to select/deselect)
+- **Sessions logged:** `1-5`, `6-15`, `16-50`, `50+`
+- **Break type:** inactive dark, selected purple tint (`rgba(83,74,183,0.2)` / `#9B95E8`)
+- **Wave direction:** inactive dark, selected green tint (`rgba(15,110,86,0.2)` / `#3CC4C4`)
+- Draft state — changes only apply on "Apply Filters"
+- Region filter removed (use search bar instead)
+
+---
+
+## Profile Page (`app/(tabs)/profile.tsx`)
+
+- **Top bar:** Lineups wordmark center
+- **Username:** centered above stats row, Georgia bold 26px, cream, no @ symbol
+- **Avatar:** 83×83px circle, offset right and upward
+- **Display name:** Georgia regular (not bold) below avatar
+- **Stats row:** SURFS / BREAKS / REGIONS — 22px Georgia bold cream values, 11px teal labels
+- **Follow row:** followers/following left, "Member since Mon YYYY" right-aligned (14px teal)
+- **Tabs:** Breaks / Wishlist — same sliding indicator as breaks page
+- Break rows match breaks page style exactly
+
+---
+
+## Feed Page (`app/(tabs)/feed.tsx`)
+
+Dark navy theme:
+- Cards: `#0F2838` bg, `rgba(74,122,135,0.3)` border
+- Break name / display name: `#E8D5B8`; username / timestamp / excerpt: `#4A7A87`
+- Rating dots: `#3CC4C4` filled / `#1B5A6A` empty border
+- Type pills: `rgba(83,74,183,0.2)` / `#9B95E8`; Direction pills: `rgba(15,110,86,0.2)` / `#3CC4C4`
+- Like icon: `#3CC4C4` active / `#4A7A87` inactive
+
+---
+
+## Map Page (`app/(tabs)/map.tsx`)
+
+### Pin Types
+| Status | Fill | Stroke |
+|---|---|---|
+| Visited | `#3CC4C4` | `#E8D5B8` |
+| Favorite | `#7F77DD` | `#CECBF6` |
+| Wishlist | `#C5A882` | `#E8D5B8` |
+| Unvisited | `#4A2D0E` | `#C5A882` (0.75 opacity) |
+| Custom | `#0B2230` | `#E8D5B8` (dashed) |
+
+### Callout Card
+- Shows break name, type, status pill, break type + direction pills, stats (sessions / break rating dots / avg session)
+- **"Rate break"** shown when `calloutStats.breakRating === null`
+- **"Log session"** shown when break is already rated
+- "View break" secondary CTA (placeholder)
+
+### Pin Drop
+FAB (bottom right) enters pin drop mode. Tap map to place pin. Form sheet collects name, break type, wave direction, coordinates. CTAs: "Save & log session" / "Save pin only".
+
+---
+
+## Database
+
+### Tables
+- `profiles` — `username`, `display_name`, `bio`, `email`, `experience_level`, `stance`, `preferred_board`, `home_break`, `created_at`
+- `breaks` — `id`, `name`, `lat`, `lng`, `type`, `direction`, `region`, `is_custom`, `created_by`
+- `sessions` — `user_id`, `break_id`, `date`, `rating`, `swell_size`, `wind`, `crowd_factor`, `board`, `surfed_with`, `notes`, `is_public`
+- `session_photos` — `session_id`, `user_id`, `url`, `storage_path`
+- `break_ratings` — `user_id`, `break_id`, `rating`, `is_favorite`
+- `follows` — `follower_id`, `following_id`
+- `wishlist` — `user_id`, `break_id`
+
+### Migrations Required
+```sql
+-- Add region to breaks
+scripts/add-region-column.sql
+
+-- Add email to profiles
+scripts/add-email-to-profiles.sql
+
+-- Add crowd_factor to sessions
+ALTER TABLE sessions ADD COLUMN IF NOT EXISTS
+crowd_factor text CHECK (crowd_factor IN ('empty','moderate','crowded','zoo'));
+```
+
+### Region Bounds (for `add-region-column.sql`)
+| Region | Lat | Lng |
 |---|---|---|
 | Los Angeles, CA | 33.75–34.15 | -119.1 to -118.35 |
 | Orange County, CA | 33.35–33.75 | -118.15 to -117.45 |
@@ -254,46 +337,61 @@ Adds a `region TEXT` column to the `breaks` table and backfills it for all seede
 | Portugal | 38.5–38.75 | -9.5 to -9.1 |
 | Mexico | 17.7–18.9 | -104.1 to -101.5 |
 
-**Decision:** Region is stored as a DB column rather than computed from lat/lng at runtime. This prevents coordinates from ever surfacing as region labels in the UI, and makes region-based queries possible directly in Supabase without client-side filtering.
-
-### `scripts/add-email-to-profiles.sql`
-Adds an `email TEXT` column to `profiles` and backfills from `auth.users`. New accounts write email to profiles during the profile creation step of onboarding.
-
-**Decision:** Required for client-side contacts matching. Without storing email in `profiles`, there's no way to match device contacts against registered users without a server-side function.
-
 ---
 
-## Key Dependencies Added
+## Key Dependencies
 
 | Package | Purpose |
 |---|---|
-| `expo-contacts` | Read device contacts for friends discovery on the friends screen |
-| `expo-image-picker` | Avatar photo selection on the profile screen |
+| `expo-contacts` | Read device contacts for friends discovery |
+| `expo-image-picker` | Avatar + session photo selection |
+| `react-native-maps` | Map view |
+| `react-native-map-clustering` | Pin clustering on map |
+| `react-native-svg` | Board icons, Lineups wordmark |
+| `@expo/vector-icons` | Ionicons tab and UI icons |
 
 ---
 
-## File Structure (Onboarding)
+## File Structure
 
 ```
 app/
   (auth)/
-    splash.tsx         — entry / logo screen
-    login.tsx          — Supabase email auth
+    splash.tsx          — entry / logo screen
+    login.tsx           — Supabase email auth
+  (tabs)/
+    _layout.tsx         — tab bar config, WaveIcon for Breaks tab
+    feed.tsx            — social feed (dark theme)
+    breaks.tsx          — my breaks list with filter sheet
+    map.tsx             — map with pins, callout, rate break modal, pin drop
+    journal.tsx         — session journal
+    profile.tsx         — user profile (dark theme)
   onboarding/
-    profile.tsx        — name + username (2 sub-steps)
-    stance.tsx         — experience level
-    stance-screen.tsx  — regular / goofy / N/A
-    board.tsx          — board type with SVG icons
-    homebreak.tsx      — home break search (name + region)
-    contacts.tsx       — contacts permission request + skip modal
-    friends.tsx        — find your crew (3 prioritized sections)
-    history.tsx        — log past sessions (region-grouped, rated)
-    done.tsx           — completion
+    profile.tsx         — name + username
+    stance.tsx          — experience level
+    stance-screen.tsx   — regular / goofy / N/A
+    board.tsx           — board type with SVG icons (7 options incl. Gun)
+    homebreak.tsx       — home break search
+    contacts.tsx        — contacts permission
+    friends.tsx         — find your crew
+    history.tsx         — log past sessions
+    done.tsx            — completion
+  log-session.tsx       — 5-step session logging flow (transparent modal)
+  _layout.tsx           — root stack, log-session as transparentModal
+
+lib/
+  supabase.ts           — Supabase client
+
+constants/
+  colors.ts             — darkTheme / lightTheme token objects
+
+context/
+  ThemeContext.tsx      — ThemeProvider + useTheme hook
 
 scripts/
-  seed-breaks.sql              — initial breaks dataset
-  add-region-column.sql        — migration: adds region to breaks
-  add-email-to-profiles.sql    — migration: adds email to profiles
+  seed-breaks.sql
+  add-region-column.sql
+  add-email-to-profiles.sql
 ```
 
 ---
