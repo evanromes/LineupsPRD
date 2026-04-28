@@ -1,6 +1,9 @@
 // -- Migration required in Supabase before crowd_factor will save:
 // -- ALTER TABLE sessions ADD COLUMN IF NOT EXISTS
 // -- crowd_factor text CHECK (crowd_factor IN ('empty','moderate','crowded','zoo'));
+//
+// -- Migration required in Supabase before tagged users will save:
+// -- ALTER TABLE sessions ADD COLUMN IF NOT EXISTS tagged_user_ids uuid[];
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -22,7 +25,7 @@ import {
 import { router, useLocalSearchParams } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Ionicons } from '@expo/vector-icons'
-import Svg, { Ellipse, Line, Path } from 'react-native-svg'
+import Svg, { Circle, ClipPath, Defs, Ellipse, G, Line, Path } from 'react-native-svg'
 import { supabase } from '../lib/supabase'
 
 const SCREEN_HEIGHT = Dimensions.get('window').height
@@ -35,9 +38,20 @@ interface PickedPhoto {
   mimeType: string
 }
 
+interface TaggedProfile {
+  id: string
+  username: string | null
+  display_name: string | null
+}
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SWELL_OPTIONS = ['0–3ft', '3–5ft', '5–8ft', '8–12ft', '12–15ft', '15–20ft', '20ft+']
+const SWELL_OPTIONS = [
+  '0–1ft', '1–3ft', '3–5ft', '5–8ft', '8–12ft', '12–15ft', '15–20ft', '20ft+',
+]
+// Visual wave heights (in viewBox px) per swell index — sized so the surfer
+// looks dwarfed at 20ft and toy-sized waves at 0–1ft.
+const SWELL_WAVE_HEIGHTS = [14, 30, 46, 64, 84, 104, 122, 138]
 const WIND_OPTIONS  = ['Offshore', 'Onshore', 'Glassy', 'Cross', 'N/A']
 
 const CROWD_OPTIONS: { label: string; value: string }[] = [
@@ -377,6 +391,428 @@ const sliderStyles = StyleSheet.create({
   },
 })
 
+// ─── Swell Size Slider (visual wave + draggable surfer) ──────────────────────
+
+const STAGE_WIDTH       = 320
+const STAGE_HEIGHT      = 158
+const BASELINE          = 146
+const SURFER_THUMB_SIZE = 42
+const WAVE_WIDTH        = 152
+const WAVE_OFFSET_X     = (STAGE_WIDTH - WAVE_WIDTH) / 2
+
+function WaveAndSurfer({ height }: { height: number }) {
+  // Continuous flow phase — streaks lift up the wave on their own.
+  // Cycle ~3.63s (15% faster than the prior 4.17s); ~30 ticks/sec stays smooth.
+  const [phase, setPhase] = useState(0)
+  useEffect(() => {
+    let last = Date.now()
+    const id = setInterval(() => {
+      const now = Date.now()
+      const dt  = (now - last) / 1000
+      last = now
+      setPhase(p => (p + dt / 3.63) % 1)
+    }, 1000 / 30)
+    return () => clearInterval(id)
+  }, [])
+
+  if (height <= 4) {
+    // Flat-water look for tiny swell — just a hint of ripple
+    return (
+      <Path
+        d={`M 20 ${BASELINE - 2} Q 60 ${BASELINE - 4} 110 ${BASELINE - 2} Q 150 ${BASELINE} 200 ${BASELINE - 2}`}
+        fill="none" stroke="#3CC4C4" strokeWidth={1} opacity={0.5}
+      />
+    )
+  }
+
+  const peakY = BASELINE - height
+  // Asymmetric breaking-wave shape: longer back, steeper face
+  const wavePath = `
+    M 0 ${BASELINE}
+    L 0 ${BASELINE - height * 0.35}
+    Q 22 ${peakY - 4} 58 ${peakY}
+    L 78 ${peakY + height * 0.05}
+    Q 94 ${peakY + height * 0.28} 108 ${peakY + height * 0.5}
+    Q 128 ${peakY + height * 0.78} 152 ${BASELINE}
+    Z
+  `
+
+  // Surfer rides the face, just right of the lip — fixed size regardless of wave height
+  const sx    = 110
+  const sFeet = BASELINE - height * 0.48
+
+  // Board tilts to match the wave face slope at the surfer's position.
+  // Slope ≈ atan2(dy, dx) on the face curve from x=108 to x=128.
+  const slopeDeg   = (Math.atan2(height * 0.28, 20) * 180) / Math.PI
+  const boardAngle = Math.min(38, slopeDeg * 0.75)
+
+  const skin  = '#E8D5B8'
+  const board = '#0F2838'
+
+  return (
+    <G transform={`translate(${WAVE_OFFSET_X} 0)`}>
+      <Defs>
+        <ClipPath id="waveClip">
+          <Path d={wavePath} />
+        </ClipPath>
+      </Defs>
+
+      {/* Wave fill */}
+      <Path d={wavePath} fill="#1B7A87" opacity={0.55} />
+
+      {/* Rising streaks — water lifts up the wave and drifts toward the back.
+         Each lane has a fixed base x; its streak rises from the baseline to
+         the wave crest, drifting slightly left as it climbs (matches face
+         slope direction). Lanes are phase-staggered so the face shimmers.
+         Clipped to the wave silhouette so streaks never spill onto the canvas. */}
+      <G clipPath="url(#waveClip)">
+      {(() => {
+        // Lane base x-positions — face → back. Adds another set on top of the
+        // doubled density: 6 / 9 / 12 lanes for small / medium / big swells.
+        const lanes: number[] =
+          height < 28  ? [124, 108, 92, 78, 64, 50] :
+          height < 70  ? [138, 124, 110, 96, 82, 68, 54, 40, 26] :
+                         [143, 132, 120, 108, 96, 84, 72, 60, 48, 36, 24, 12]
+        const laneOffsets = [
+          0.0, 0.42, 0.74, 0.21, 0.58, 0.13,
+          0.85, 0.36, 0.65, 0.04, 0.49, 0.92,
+        ]
+
+        // Local wave height at a given x (mirrors the wave silhouette)
+        const localH = (x: number) => {
+          if (x <= 0 || x >= 152) return 0
+          if (x < 58)  return height * (0.35 + (x / 58) * 0.65)
+          if (x <= 78) return height
+          return height * Math.max(0, 1 - (x - 78) / 74)
+        }
+
+        // Streak tilt parallels the wave face slope
+        const tiltRad = Math.atan2(height, 74)
+        const len     = Math.max(7, Math.min(16, height * 0.28))
+        const dx      = (len / 2) * Math.cos(tiltRad)
+        const dy      = (len / 2) * Math.sin(tiltRad)
+
+        // Smaller waves peel mostly horizontally — leftward drift dominates;
+        // bigger waves throw water more vertically up the face.
+        const driftFactor =
+          height < 50 ? 1.5 :   // 0–1ft, 1–3ft, 3–5ft — strong leftward flow
+          height < 70 ? 0.6 :   // 5–8ft — diagonal
+                        0.22    // 8ft+ — mostly vertical lift
+
+        return lanes.map((laneX, i) => {
+          const h = localH(laneX)
+          if (h < 10) return null
+
+          const vp = (phase + laneOffsets[i]) % 1
+          // Rise (vp 0→1) and drift left; small waves peel near-horizontal,
+          // big waves climb near-vertical.
+          const cx = laneX - vp * h * driftFactor
+          const cy = BASELINE - vp * h
+
+          // Fade in low, dissolve near the top — born-and-die feel
+          let opacity = 0.6
+          if (vp < 0.15)      opacity *= vp / 0.15
+          else if (vp > 0.82) opacity *= Math.max(0, (1 - vp) / 0.18)
+
+          return (
+            <Path
+              key={i}
+              d={`M ${cx - dx} ${cy - dy} L ${cx + dx} ${cy + dy}`}
+              fill="none" stroke="#7AABB8" strokeWidth={1.1} opacity={opacity}
+              strokeLinecap="round"
+            />
+          )
+        })
+      })()}
+      </G>
+
+      {/* Wave outline */}
+      <Path d={wavePath} fill="none" stroke="#3CC4C4" strokeWidth={1.2} opacity={0.9} />
+      {/* Subtle highlight on the face */}
+      <Path
+        d={`M 78 ${peakY + height * 0.05} Q 94 ${peakY + height * 0.28} 108 ${peakY + height * 0.5}`}
+        fill="none" stroke="#7AABB8" strokeWidth={0.7} opacity={0.6}
+      />
+
+      {/* Surfer — local frame: feet at y=0, forward direction = +x.
+         Whole figure rotates with the board so it points down the wave. */}
+      <G transform={`translate(${sx} ${sFeet}) rotate(${boardAngle}) scale(1.15)`}>
+        {/* Board with rounded tail (left) and pointed nose (right) */}
+        <Path
+          d="M -12 0 Q -13 -2 -9 -1.8 L 9 -1.4 Q 14 -0.2 14 0 Q 14 0.2 9 1.4 L -9 1.8 Q -13 2 -12 0 Z"
+          fill={board} stroke={skin} strokeWidth={0.9}
+        />
+
+        {/* Back leg — slight knee bend, knee tracks forward */}
+        <Path
+          d="M -7 0 Q -1 -2 -2.5 -5 Q -2 -6 -1 -7"
+          stroke={skin} strokeWidth={3} strokeLinecap="round" strokeLinejoin="round" fill="none"
+        />
+        {/* Front leg — pulled back to ~60% along the nose, deeper crouch */}
+        <Path
+          d="M 5 0 Q 3 -4 1 -7"
+          stroke={skin} strokeWidth={3} strokeLinecap="round" fill="none"
+        />
+
+        {/* Torso silhouette — hips low and back, shoulder forward */}
+        <Path
+          d="M -2 -7 Q -1 -10 2 -13 Q 5 -14.5 7 -14 Q 7 -12 5 -10 Q 3 -8 1 -7 Z"
+          fill={skin}
+        />
+
+        {/* Back arm — pulled back for balance */}
+        <Path
+          d="M 2 -13 Q -1 -12 -4 -10"
+          stroke={skin} strokeWidth={2.2} strokeLinecap="round" fill="none"
+        />
+        {/* Front arm — extended forward, leading the line */}
+        <Path
+          d="M 6 -13 Q 9 -12 12 -10"
+          stroke={skin} strokeWidth={2.2} strokeLinecap="round" fill="none"
+        />
+
+        {/* Head */}
+        <Circle cx={6} cy={-16.5} r={2.7} fill={skin} />
+      </G>
+    </G>
+  )
+}
+
+function MiniSurfer({ active, height }: { active: boolean; height: number }) {
+  const skin  = active ? '#E8D5B8' : '#4A7A87'
+  const board = active ? '#3CC4C4' : '#1B3A45'
+  // Match the wave surfer's board angle — same formula as WaveAndSurfer
+  const slopeDeg   = (Math.atan2(height * 0.28, 20) * 180) / Math.PI
+  const boardAngle = Math.min(38, slopeDeg * 0.75)
+  return (
+    <Svg width={SURFER_THUMB_SIZE} height={SURFER_THUMB_SIZE} viewBox="0 0 42 42">
+      <Circle cx={21} cy={21} r={19} fill="#0F2838" stroke={active ? '#3CC4C4' : '#1B3A45'} strokeWidth={1.5} />
+      {/* Mini surfer — same stance as the rider on the wave (board tilted,
+         filled torso, bent back leg, lead arm forward). Local origin = feet.
+         Board tilt tracks the wave selection so the thumb leans with size. */}
+      <G transform={`translate(18 30) rotate(${boardAngle})`}>
+        {/* Board (rounded tail left, pointed nose right) */}
+        <Path
+          d="M -12 0 Q -13 -2 -9 -1.8 L 9 -1.4 Q 14 -0.2 14 0 Q 14 0.2 9 1.4 L -9 1.8 Q -13 2 -12 0 Z"
+          fill={board} stroke={skin} strokeWidth={0.6}
+        />
+        {/* Back leg with knee bend */}
+        <Path
+          d="M -7 0 Q -1 -2 -2.5 -5 Q -2 -6 -1 -7"
+          stroke={skin} strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" fill="none"
+        />
+        {/* Front leg pulled back */}
+        <Path
+          d="M 5 0 Q 3 -4 1 -7"
+          stroke={skin} strokeWidth={2.2} strokeLinecap="round" fill="none"
+        />
+        {/* Torso silhouette */}
+        <Path
+          d="M -2 -7 Q -1 -10 2 -13 Q 5 -14.5 7 -14 Q 7 -12 5 -10 Q 3 -8 1 -7 Z"
+          fill={skin}
+        />
+        {/* Back arm */}
+        <Path
+          d="M 2 -13 Q -1 -12 -4 -10"
+          stroke={skin} strokeWidth={1.6} strokeLinecap="round" fill="none"
+        />
+        {/* Front arm */}
+        <Path
+          d="M 6 -13 Q 9 -12 12 -10"
+          stroke={skin} strokeWidth={1.6} strokeLinecap="round" fill="none"
+        />
+        {/* Head */}
+        <Circle cx={6} cy={-16.5} r={2.4} fill={skin} />
+      </G>
+    </Svg>
+  )
+}
+
+function SwellSizeSlider({
+  value,
+  onChange,
+}: {
+  value: string | null
+  onChange: (v: string) => void
+}) {
+  const findIdx = (v: string | null) => (v ? SWELL_OPTIONS.indexOf(v) : -1)
+  const [index, setIndex] = useState(findIdx(value))
+  const [trackWidth, setTrackWidth] = useState(0)
+  const trackWidthRef = useRef(0)
+  const trackPageXRef = useRef(0)
+  const trackViewRef  = useRef<View>(null)
+  const onChangeRef   = useRef(onChange)
+  onChangeRef.current = onChange
+
+  useEffect(() => {
+    const i = findIdx(value)
+    if (i !== index) setIndex(i)
+  }, [value])
+
+  const lastIdx = SWELL_OPTIONS.length - 1
+
+  function posToIndex(x: number): number {
+    const w = trackWidthRef.current - SURFER_THUMB_SIZE
+    if (w <= 0) return 0
+    const ratio = Math.max(0, Math.min(1, (x - SURFER_THUMB_SIZE / 2) / w))
+    // Left edge → smallest swell (index 0); right edge → biggest
+    return Math.round(ratio * lastIdx)
+  }
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder:  () => true,
+      onPanResponderGrant: (e) => {
+        const relX = e.nativeEvent.pageX - trackPageXRef.current
+        const i = posToIndex(relX)
+        setIndex(i)
+        onChangeRef.current(SWELL_OPTIONS[i])
+      },
+      onPanResponderMove: (e) => {
+        const relX = e.nativeEvent.pageX - trackPageXRef.current
+        const i = posToIndex(relX)
+        setIndex(i)
+        onChangeRef.current(SWELL_OPTIONS[i])
+      },
+    })
+  ).current
+
+  function onTrackLayout(e: any) {
+    const w = e.nativeEvent.layout.width
+    trackWidthRef.current = w
+    setTrackWidth(w)
+    trackViewRef.current?.measure((_x, _y, _w, _h, pageX) => {
+      trackPageXRef.current = pageX
+    })
+  }
+
+  const isUnset     = index < 0
+  const displayIdx  = isUnset ? 2 : index
+  const waveHeight  = SWELL_WAVE_HEIGHTS[displayIdx]
+  const usableWidth = Math.max(0, trackWidth - SURFER_THUMB_SIZE)
+  const thumbLeft   = (displayIdx / lastIdx) * usableWidth
+
+  return (
+    <View>
+      <View style={swellStyles.headerRow}>
+        <Text style={swellStyles.sectionLabel}>SWELL SIZE</Text>
+        <Text style={[swellStyles.currentValue, isUnset && swellStyles.currentValueUnset]}>
+          {isUnset ? 'drag to size' : SWELL_OPTIONS[index]}
+        </Text>
+      </View>
+
+      {/* Wave visual */}
+      <View style={[swellStyles.stage, isUnset && swellStyles.stageUnset]}>
+        <Svg
+          width="100%"
+          height={STAGE_HEIGHT}
+          viewBox={`0 0 ${STAGE_WIDTH} ${STAGE_HEIGHT}`}
+          preserveAspectRatio="xMidYMax meet"
+        >
+          <Line x1={0} y1={BASELINE} x2={STAGE_WIDTH} y2={BASELINE} stroke="#1B3A45" strokeWidth={0.8} />
+          <WaveAndSurfer height={waveHeight} />
+        </Svg>
+      </View>
+
+      {/* Slider track */}
+      <View
+        ref={trackViewRef}
+        style={swellStyles.sliderTrack}
+        onLayout={onTrackLayout}
+        {...panResponder.panHandlers}
+      >
+        <View style={swellStyles.sliderLine} />
+        <View style={[swellStyles.surferThumb, { left: thumbLeft }]} pointerEvents="none">
+          <MiniSurfer active={!isUnset} height={waveHeight} />
+        </View>
+      </View>
+
+      <View style={swellStyles.rangeLabels}>
+        <Text style={swellStyles.rangeLabel}>0–1ft</Text>
+        <Text style={[swellStyles.rangeLabelHint]}>← drag to size your swell →</Text>
+        <Text style={swellStyles.rangeLabel}>20ft+</Text>
+      </View>
+    </View>
+  )
+}
+
+const swellStyles = StyleSheet.create({
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sectionLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#3CC4C4',
+    letterSpacing: 1.5,
+  },
+  currentValue: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontStyle: 'italic',
+    fontSize: 18,
+    color: '#3CC4C4',
+  },
+  currentValueUnset: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '300',
+    fontStyle: 'italic',
+    fontSize: 12,
+    color: '#4A7A87',
+    letterSpacing: 0.4,
+  },
+  stage: {
+    width: '100%',
+    height: STAGE_HEIGHT,
+    marginBottom: 4,
+  },
+  stageUnset: {
+    opacity: 0.45,
+  },
+  sliderTrack: {
+    height: SURFER_THUMB_SIZE + 4,
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  sliderLine: {
+    position: 'absolute',
+    left: SURFER_THUMB_SIZE / 2,
+    right: SURFER_THUMB_SIZE / 2,
+    height: 3,
+    backgroundColor: '#1B3A45',
+    borderRadius: 2,
+  },
+  surferThumb: {
+    position: 'absolute',
+    width: SURFER_THUMB_SIZE,
+    height: SURFER_THUMB_SIZE,
+  },
+  rangeLabels: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: 6,
+  },
+  rangeLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    color: '#4A7A87',
+    letterSpacing: 0.5,
+  },
+  rangeLabelHint: {
+    fontFamily: 'Helvetica Neue',
+    fontStyle: 'italic',
+    fontSize: 10,
+    color: '#2A5A65',
+    letterSpacing: 0.3,
+  },
+})
+
 // ─── Section Label ────────────────────────────────────────────────────────────
 
 function SectionLabel({ children, color }: { children: string; color?: string }) {
@@ -490,7 +926,11 @@ export default function LogSessionScreen() {
 
   // Step 5 — scene details
   const [board,        setBoard]        = useState('')
-  const [surfedWith,   setSurfedWith]   = useState('')
+  const [taggedUsers,  setTaggedUsers]  = useState<TaggedProfile[]>([])
+  const [tagQuery,     setTagQuery]     = useState('')
+  const [tagSuggestions, setTagSuggestions] = useState<TaggedProfile[]>([])
+  const [tagSearching, setTagSearching] = useState(false)
+  const tagSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [notes,        setNotes]        = useState('')
   const [photos,       setPhotos]       = useState<PickedPhoto[]>([])
   const [isPublic,     setIsPublic]     = useState(true)
@@ -581,6 +1021,45 @@ export default function LogSessionScreen() {
     setPhotos(prev => prev.filter((_, i) => i !== index))
   }
 
+  // ─── Tag search ────────────────────────────────────────────────────────────
+
+  useEffect(() => {
+    const q = tagQuery.trim()
+    if (tagSearchTimer.current) clearTimeout(tagSearchTimer.current)
+    if (q.length === 0) {
+      setTagSuggestions([])
+      setTagSearching(false)
+      return
+    }
+    setTagSearching(true)
+    tagSearchTimer.current = setTimeout(async () => {
+      const term = `%${q}%`
+      let query = supabase
+        .from('profiles')
+        .select('id, username, display_name')
+        .or(`username.ilike.${term},display_name.ilike.${term}`)
+        .limit(8)
+      if (userId) query = query.neq('id', userId)
+      const { data } = await query
+      const taggedIds = new Set(taggedUsers.map(u => u.id))
+      setTagSuggestions((data ?? []).filter(p => !taggedIds.has(p.id)))
+      setTagSearching(false)
+    }, 300)
+    return () => {
+      if (tagSearchTimer.current) clearTimeout(tagSearchTimer.current)
+    }
+  }, [tagQuery, userId, taggedUsers])
+
+  function addTag(p: TaggedProfile) {
+    setTaggedUsers(prev => prev.some(u => u.id === p.id) ? prev : [...prev, p])
+    setTagQuery('')
+    setTagSuggestions([])
+  }
+
+  function removeTag(id: string) {
+    setTaggedUsers(prev => prev.filter(u => u.id !== id))
+  }
+
   // ─── Navigation ────────────────────────────────────────────────────────────
 
   function handleBack() {
@@ -618,7 +1097,7 @@ export default function LogSessionScreen() {
                 ? [boardType.charAt(0).toUpperCase() + boardType.slice(1), boardNotes.trim() || null].filter(Boolean).join(' — ')
                 : boardNotes.trim() || null)
             : board.trim() || null,
-          surfed_with: surfedWith.trim() || null,
+          tagged_user_ids: taggedUsers.length > 0 ? taggedUsers.map(u => u.id) : null,
           notes: notes.trim() || null,
           is_public: isPublic,
         })
@@ -824,12 +1303,7 @@ export default function LogSessionScreen() {
             <Text style={styles.step3Heading}>How were the conditions?</Text>
 
             <View style={styles.step3Section}>
-              <SectionLabel color="#3CC4C4">SWELL SIZE</SectionLabel>
-              <ChipRow
-                options={SWELL_OPTIONS}
-                selected={swellSize}
-                onSelect={setSwellSize}
-              />
+              <SwellSizeSlider value={swellSize} onChange={setSwellSize} />
             </View>
 
             <View style={styles.step3Section}>
@@ -883,7 +1357,133 @@ export default function LogSessionScreen() {
     )
   }
 
-  // Steps 1, 5 — full screen layout
+  // Step 5 — set the scene sheet
+  if (step === 5) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.step2Outer}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      >
+        <View style={styles.conditionsSheet}>
+          <View style={styles.sheetHandle} />
+
+          <View style={styles.sheetHeader}>
+            <TouchableOpacity onPress={handleBack} style={styles.headerBack} hitSlop={12}>
+              <Ionicons name="chevron-back" size={22} color="#E8D5B8" />
+            </TouchableOpacity>
+            <ProgressDots step={step} isFirstVisit={isFirstVisit} />
+            <View style={styles.headerSpacer} />
+          </View>
+
+          <ScrollView
+            style={styles.step3Scroll}
+            contentContainerStyle={styles.step3ScrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.stepHeading}>Set the scene</Text>
+            <Text style={styles.stepSubheading}>Who you surfed with, notes</Text>
+
+            <View style={styles.fieldBlock}>
+              <SectionLabel>SURFED WITH</SectionLabel>
+              {taggedUsers.length > 0 && (
+                <View style={styles.tagChipRow}>
+                  {taggedUsers.map(u => (
+                    <View key={u.id} style={styles.tagChip}>
+                      <Text style={styles.tagChipText}>
+                        {u.display_name || u.username || 'Surfer'}
+                      </Text>
+                      <TouchableOpacity onPress={() => removeTag(u.id)} hitSlop={8} style={styles.tagChipRemove}>
+                        <Ionicons name="close" size={12} color="#E8D5B8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              )}
+              <TextInput
+                style={styles.textInput}
+                placeholder="Search by name or username"
+                placeholderTextColor="#4A7A87"
+                value={tagQuery}
+                onChangeText={setTagQuery}
+                autoCorrect={false}
+                autoCapitalize="none"
+              />
+              {tagQuery.trim().length > 0 && (
+                <View style={styles.tagSuggestList}>
+                  {tagSearching && tagSuggestions.length === 0 && (
+                    <Text style={styles.tagSuggestEmpty}>Searching…</Text>
+                  )}
+                  {!tagSearching && tagSuggestions.length === 0 && (
+                    <Text style={styles.tagSuggestEmpty}>No matches</Text>
+                  )}
+                  {tagSuggestions.map(p => (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={styles.tagSuggestRow}
+                      onPress={() => addTag(p)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.tagSuggestName}>
+                        {p.display_name || p.username || 'Surfer'}
+                      </Text>
+                      {p.username && p.display_name && (
+                        <Text style={styles.tagSuggestHandle}>@{p.username}</Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <SectionLabel>NOTES</SectionLabel>
+              <TextInput style={styles.notesInput} placeholder="How was it..." placeholderTextColor="#4A7A87" value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+            </View>
+
+            <View style={styles.fieldBlock}>
+              <SectionLabel>PHOTOS</SectionLabel>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                <View style={styles.photoRow}>
+                  {photos.map((p, i) => (
+                    <View key={i} style={styles.photoThumb}>
+                      <Image source={{ uri: p.uri }} style={styles.photoImage} />
+                      <TouchableOpacity style={styles.photoRemove} onPress={() => removePhoto(i)} hitSlop={6}>
+                        <Ionicons name="close-circle" size={18} color="#E8D5B8" />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  <TouchableOpacity style={styles.photoAdd} onPress={pickPhoto} activeOpacity={0.7}>
+                    <Ionicons name="add" size={28} color="#4A7A87" />
+                  </TouchableOpacity>
+                </View>
+              </ScrollView>
+            </View>
+
+            <View style={styles.toggleCardLarge}>
+              <View style={styles.toggleCardLeft}>
+                <View>
+                  <Text style={styles.toggleCardLabel}>Public</Text>
+                  <Text style={styles.toggleCardSub}>Shared to your feed</Text>
+                </View>
+              </View>
+              <Toggle value={isPublic} onValueChange={setIsPublic} onColor="#1B7A87" offColor="#1B3A45" trackWidth={40} trackHeight={22} />
+            </View>
+
+            {error && <Text style={styles.errorText}>{error}</Text>}
+
+            <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+              {saving ? <ActivityIndicator color="#E8D5B8" /> : <Text style={styles.saveButtonText}>Save session</Text>}
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        <Toast visible={showToast} />
+      </KeyboardAvoidingView>
+    )
+  }
+
+  // Step 1 — full screen layout
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -936,60 +1536,6 @@ export default function LogSessionScreen() {
           </View>
         )}
 
-        {/* ── Step 5: Set the Scene ──────────────────────────────────────── */}
-        {step === 5 && (
-          <View style={styles.step4Container}>
-            <Text style={styles.stepHeading}>Set the scene</Text>
-            <Text style={styles.stepSubheading}>Who you surfed with, notes</Text>
-
-            <View style={styles.fieldBlock}>
-              <SectionLabel>SURFED WITH</SectionLabel>
-              <TextInput style={styles.textInput} placeholder="Add people you surfed with" placeholderTextColor="#4A7A87" value={surfedWith} onChangeText={setSurfedWith} autoCorrect={false} />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <SectionLabel>NOTES</SectionLabel>
-              <TextInput style={styles.notesInput} placeholder="How was it..." placeholderTextColor="#4A7A87" value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
-            </View>
-
-            <View style={styles.fieldBlock}>
-              <SectionLabel>PHOTOS</SectionLabel>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                <View style={styles.photoRow}>
-                  {photos.map((p, i) => (
-                    <View key={i} style={styles.photoThumb}>
-                      <Image source={{ uri: p.uri }} style={styles.photoImage} />
-                      <TouchableOpacity style={styles.photoRemove} onPress={() => removePhoto(i)} hitSlop={6}>
-                        <Ionicons name="close-circle" size={18} color="#E8D5B8" />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  <TouchableOpacity style={styles.photoAdd} onPress={pickPhoto} activeOpacity={0.7}>
-                    <Ionicons name="add" size={28} color="#4A7A87" />
-                  </TouchableOpacity>
-                </View>
-              </ScrollView>
-            </View>
-
-            <View style={styles.toggleCardLarge}>
-              <View style={styles.toggleCardLeft}>
-                <View>
-                  <Text style={styles.toggleCardLabel}>Public</Text>
-                  <Text style={styles.toggleCardSub}>Shared to your feed</Text>
-                </View>
-              </View>
-              <Toggle value={isPublic} onValueChange={setIsPublic} onColor="#1B7A87" offColor="#1B3A45" trackWidth={40} trackHeight={22} />
-            </View>
-
-            {error && <Text style={styles.errorText}>{error}</Text>}
-
-            <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
-              {saving ? <ActivityIndicator color="#E8D5B8" /> : <Text style={styles.saveButtonText}>Save session</Text>}
-            </TouchableOpacity>
-
-            <View style={{ height: 32 }} />
-          </View>
-        )}
       </ScrollView>
 
       <Toast visible={showToast} />
@@ -1366,6 +1912,71 @@ const styles = StyleSheet.create({
     color: '#E8D5B8',
     minHeight: 80,
     textAlignVertical: 'top',
+  },
+
+  // Tag chips + autocomplete
+  tagChipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 8,
+  },
+  tagChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(60,196,196,0.18)',
+    borderWidth: 0.5,
+    borderColor: '#3CC4C4',
+    borderRadius: 999,
+    paddingLeft: 10,
+    paddingRight: 6,
+    paddingVertical: 5,
+    gap: 6,
+  },
+  tagChipText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#E8D5B8',
+  },
+  tagChipRemove: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: 'rgba(11,34,48,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagSuggestList: {
+    marginTop: 6,
+    backgroundColor: '#0F2838',
+    borderWidth: 0.5,
+    borderColor: 'rgba(74,122,135,0.3)',
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  tagSuggestRow: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.18)',
+  },
+  tagSuggestName: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 13,
+    color: '#E8D5B8',
+  },
+  tagSuggestHandle: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 11,
+    color: '#4A7A87',
+    marginTop: 2,
+  },
+  tagSuggestEmpty: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#4A7A87',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
 
   // Photos
