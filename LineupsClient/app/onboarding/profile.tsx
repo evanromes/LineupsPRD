@@ -134,6 +134,24 @@ export default function OnboardingProfile() {
     setStep(2)
   }
 
+  async function uploadAvatar(uid: string, uri: string): Promise<string | null> {
+    try {
+      const ext = (uri.split('.').pop() ?? 'jpg').toLowerCase().replace(/[^a-z0-9]/g, '') || 'jpg'
+      const path = `${uid}/avatar.${ext}`
+      const response = await fetch(uri)
+      const blob = await response.blob()
+      const contentType = blob.type || `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { contentType, upsert: true })
+      if (uploadError) return null
+      const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+      return `${publicUrl}?v=${Date.now()}`
+    } catch {
+      return null
+    }
+  }
+
   async function handleStep2Next() {
     const trimmedUsername = username.trim().toLowerCase()
     if (!trimmedUsername || trimmedUsername.length < 3) {
@@ -149,11 +167,14 @@ export default function OnboardingProfile() {
     setSaving(true)
     setError(null)
 
+    const avatarUrl = avatarUri ? await uploadAvatar(userId, avatarUri) : null
+
     const { error: dbError } = await supabase.from('profiles').upsert(
       {
         id: userId,
         display_name: `${firstName.trim()} ${lastName.trim()}`,
         username: trimmedUsername,
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {}),
       },
       { onConflict: 'id' }
     )

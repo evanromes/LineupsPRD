@@ -77,10 +77,10 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="journal"
+        name="search"
         options={{
-          title: 'Journal',
-          tabBarIcon: tabIcon('book', 'book-outline'),
+          title: 'Search',
+          tabBarIcon: tabIcon('search', 'search-outline'),
         }}
       />
       <Tabs.Screen

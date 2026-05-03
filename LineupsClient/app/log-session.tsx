@@ -4,6 +4,16 @@
 //
 // -- Migration required in Supabase before tagged users will save:
 // -- ALTER TABLE sessions ADD COLUMN IF NOT EXISTS tagged_user_ids uuid[];
+//
+// -- Migration required in Supabase before session length will save:
+// -- ALTER TABLE sessions ADD COLUMN IF NOT EXISTS duration_minutes integer
+// --   CHECK (duration_minutes IS NULL OR duration_minutes BETWEEN 1 AND 1440);
+//
+// -- Migration required in Supabase before avatar pictures will display in the
+// -- "Surfed with" autocomplete (and to persist avatars chosen during onboarding):
+// -- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url text;
+// -- Plus: create a public Storage bucket named "avatars" with read access for
+// -- anonymous + authenticated users and write access for the file owner.
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -42,16 +52,29 @@ interface TaggedProfile {
   id: string
   username: string | null
   display_name: string | null
+  avatar_url: string | null
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const SWELL_OPTIONS = [
-  '0–1ft', '1–3ft', '3–5ft', '5–8ft', '8–12ft', '12–15ft', '15–20ft', '20ft+',
+  '0–1ft', '1–2ft', '2–3ft', '3–4ft', '4–6ft', '6–9ft', '9–12ft', '12–15ft', '15–20ft', '20ft+',
 ]
 // Visual wave heights (in viewBox px) per swell index — sized so the surfer
 // looks dwarfed at 20ft and toy-sized waves at 0–1ft.
-const SWELL_WAVE_HEIGHTS = [14, 30, 46, 64, 84, 104, 122, 138]
+const SWELL_WAVE_HEIGHTS = [14, 19, 29, 40, 53, 67, 82, 94, 120, 140]
+const SWELL_RELATIVE_LABELS = [
+  'Ankle high',
+  'Ankle to knee',
+  'Knee to waist',
+  'Waist to chest',
+  'Chest to overhead',
+  'Overhead to 1.5× overhead',
+  '1.5× to 2× overhead',
+  '2× to 3× overhead',
+  '3× to 4× overhead',
+  'XL',
+]
 const WIND_OPTIONS  = ['Offshore', 'Onshore', 'Glassy', 'Cross', 'N/A']
 
 const CROWD_OPTIONS: { label: string; value: string }[] = [
@@ -397,12 +420,15 @@ const STAGE_WIDTH       = 320
 const STAGE_HEIGHT      = 158
 const BASELINE          = 146
 const SURFER_THUMB_SIZE = 42
-const WAVE_WIDTH        = 152
+const WAVE_CORE_WIDTH   = 152
+const BACK_TAIL_LEN     = 90    // back side flattens into the ocean
+const FRONT_TAIL_LEN    = 50    // whitewater spills forward, fades to baseline
+const WAVE_WIDTH        = BACK_TAIL_LEN + WAVE_CORE_WIDTH + FRONT_TAIL_LEN
 const WAVE_OFFSET_X     = (STAGE_WIDTH - WAVE_WIDTH) / 2
 
 function WaveAndSurfer({ height }: { height: number }) {
   // Continuous flow phase — streaks lift up the wave on their own.
-  // Cycle ~3.63s (15% faster than the prior 4.17s); ~30 ticks/sec stays smooth.
+  // Cycle ~2.79s (30% faster than the prior 3.63s); ~30 ticks/sec stays smooth.
   const [phase, setPhase] = useState(0)
   useEffect(() => {
     let last = Date.now()
@@ -410,7 +436,7 @@ function WaveAndSurfer({ height }: { height: number }) {
       const now = Date.now()
       const dt  = (now - last) / 1000
       last = now
-      setPhase(p => (p + dt / 3.63) % 1)
+      setPhase(p => (p + dt / 2.79) % 1)
     }, 1000 / 30)
     return () => clearInterval(id)
   }, [])
@@ -426,19 +452,39 @@ function WaveAndSurfer({ height }: { height: number }) {
   }
 
   const peakY = BASELINE - height
-  // Asymmetric breaking-wave shape: longer back, steeper face
-  const wavePath = `
-    M 0 ${BASELINE}
-    L 0 ${BASELINE - height * 0.35}
-    Q 22 ${peakY - 4} 58 ${peakY}
-    L 78 ${peakY + height * 0.05}
-    Q 94 ${peakY + height * 0.28} 108 ${peakY + height * 0.5}
-    Q 128 ${peakY + height * 0.78} 152 ${BASELINE}
-    Z
+  const bt    = BACK_TAIL_LEN
+  const ft    = FRONT_TAIL_LEN
+
+  // Back tip sits above the baseline so the back side tapers off at a higher
+  // elevation than the front foam — reads as a swell trailing back on the ocean.
+  const backTipY = BASELINE - height * 0.08
+
+  // Lip curl: subtle forward overhang at the crest that grows with wave size,
+  // hinting at an imminent barrel on bigger swells.
+  const curl    = Math.min(1, Math.max(0, (height - 18) / 55))
+  const lipFwd  = curl * 9
+  const lipDip  = curl * height * 0.025
+
+  // Top silhouette only — back rise → peak → smooth crest-into-face curve →
+  // gradual flatten into the ocean ahead. The barrel hint is encoded directly
+  // into the crest curve's control point (forward + slightly up for big waves)
+  // rather than a separate lip segment, so there's no kink at the top.
+  const silhouettePath = `
+    M 0 ${backTipY}
+    Q ${bt * 0.40} ${BASELINE - height * 0.16} ${bt * 0.65} ${BASELINE - height * 0.30}
+    Q ${bt * 0.90} ${BASELINE - height * 0.46} ${bt} ${BASELINE - height * 0.55}
+    Q ${bt + 22} ${peakY - 4} ${bt + 58} ${peakY}
+    Q ${bt + 80 + lipFwd} ${peakY + height * 0.06 - lipDip} ${bt + 108 + lipFwd * 0.3} ${peakY + height * 0.5}
+    Q ${bt + 128} ${peakY + height * 0.72} ${bt + 152} ${BASELINE - height * 0.10}
+    Q ${bt + 152 + ft * 0.20} ${BASELINE - height * 0.045} ${bt + 152 + ft * 0.50} ${BASELINE - height * 0.014}
+    Q ${bt + 152 + ft * 0.80} ${BASELINE - height * 0.003} ${bt + 152 + ft} ${BASELINE}
   `
+  // Closed fill path — runs the bottom along the baseline so the fill stays
+  // anchored to the ocean surface without a slanted closing edge.
+  const wavePath = `${silhouettePath} L 0 ${BASELINE} Z`
 
   // Surfer rides the face, just right of the lip — fixed size regardless of wave height
-  const sx    = 110
+  const sx    = bt + 110
   const sFeet = BASELINE - height * 0.48
 
   // Board tilts to match the wave face slope at the surfer's position.
@@ -467,23 +513,34 @@ function WaveAndSurfer({ height }: { height: number }) {
          Clipped to the wave silhouette so streaks never spill onto the canvas. */}
       <G clipPath="url(#waveClip)">
       {(() => {
-        // Lane base x-positions — face → back. Adds another set on top of the
-        // doubled density: 6 / 9 / 12 lanes for small / medium / big swells.
-        const lanes: number[] =
-          height < 28  ? [124, 108, 92, 78, 64, 50] :
-          height < 70  ? [138, 124, 110, 96, 82, 68, 54, 40, 26] :
-                         [143, 132, 120, 108, 96, 84, 72, 60, 48, 36, 24, 12]
+        // Lane base x-positions in xRel coords (relative to the breaking core).
+        // Negative values fall on the back tail. Counts grow with wave size.
+        const lanes: number[] = (
+          height < 28  ? [124, 112, 100, 88, 76, 64, 52, 40, 28, 14, 0, -18, -36, -54] :
+          height < 70  ? [140, 130, 120, 110, 100, 90, 80, 70, 60, 50, 40, 30, 22, 14, 4, -10, -25, -40, -55, -70] :
+                         [145, 137, 129, 121, 113, 105, 97, 89, 81, 73, 65, 57, 49, 41, 33, 24, 16, 8, -4, -18, -32, -46, -60, -75]
+        ).map(x => x + bt)
         const laneOffsets = [
-          0.0, 0.42, 0.74, 0.21, 0.58, 0.13,
+          0.00, 0.42, 0.74, 0.21, 0.58, 0.13,
           0.85, 0.36, 0.65, 0.04, 0.49, 0.92,
+          0.27, 0.71, 0.18, 0.55, 0.83, 0.31,
+          0.69, 0.07, 0.46, 0.79, 0.24, 0.61,
         ]
 
-        // Local wave height at a given x (mirrors the wave silhouette)
+        // Local wave height at a given x. Back tail rises from 0.08h at the
+        // back tip to 0.55h at the start of the breaking core; from there the
+        // crest climbs to peak height, plateaus, then drops down the face.
         const localH = (x: number) => {
-          if (x <= 0 || x >= 152) return 0
-          if (x < 58)  return height * (0.35 + (x / 58) * 0.65)
-          if (x <= 78) return height
-          return height * Math.max(0, 1 - (x - 78) / 74)
+          if (x <= 0) return 0
+          const xRel = x - bt
+          if (xRel >= 152) return 0
+          if (xRel < 0) {
+            const t = x / bt          // 0 at back tip → 1 at start of core
+            return height * (0.08 + t * 0.47)
+          }
+          if (xRel < 58)  return height * (0.55 + (xRel / 58) * 0.45)
+          if (xRel <= 78) return height
+          return height * Math.max(0, 1 - (xRel - 78) / 74)
         }
 
         // Streak tilt parallels the wave face slope
@@ -501,9 +558,9 @@ function WaveAndSurfer({ height }: { height: number }) {
 
         return lanes.map((laneX, i) => {
           const h = localH(laneX)
-          if (h < 10) return null
+          if (h < 5) return null
 
-          const vp = (phase + laneOffsets[i]) % 1
+          const vp = (phase + laneOffsets[i % laneOffsets.length]) % 1
           // Rise (vp 0→1) and drift left; small waves peel near-horizontal,
           // big waves climb near-vertical.
           const cx = laneX - vp * h * driftFactor
@@ -526,11 +583,11 @@ function WaveAndSurfer({ height }: { height: number }) {
       })()}
       </G>
 
-      {/* Wave outline */}
-      <Path d={wavePath} fill="none" stroke="#3CC4C4" strokeWidth={1.2} opacity={0.9} />
-      {/* Subtle highlight on the face */}
+      {/* Wave outline — silhouette only, so the stroke doesn't trace the baseline */}
+      <Path d={silhouettePath} fill="none" stroke="#3CC4C4" strokeWidth={1.2} opacity={0.9} />
+      {/* Subtle highlight on the face — tracks the new smooth crest curve */}
       <Path
-        d={`M 78 ${peakY + height * 0.05} Q 94 ${peakY + height * 0.28} 108 ${peakY + height * 0.5}`}
+        d={`M ${bt + 70} ${peakY + height * 0.10} Q ${bt + 90 + lipFwd * 0.5} ${peakY + height * 0.24 - lipDip * 0.5} ${bt + 108 + lipFwd * 0.3} ${peakY + height * 0.5}`}
         fill="none" stroke="#7AABB8" strokeWidth={0.7} opacity={0.6}
       />
 
@@ -697,9 +754,16 @@ function SwellSizeSlider({
     <View>
       <View style={swellStyles.headerRow}>
         <Text style={swellStyles.sectionLabel}>SWELL SIZE</Text>
-        <Text style={[swellStyles.currentValue, isUnset && swellStyles.currentValueUnset]}>
-          {isUnset ? 'drag to size' : SWELL_OPTIONS[index]}
-        </Text>
+        <View style={swellStyles.headerValueGroup}>
+          <Text style={[swellStyles.currentValue, isUnset && swellStyles.currentValueUnset]}>
+            {isUnset ? 'drag to size' : SWELL_OPTIONS[index]}
+          </Text>
+          {!isUnset && (
+            <Text style={swellStyles.relativeLabel}>
+              {SWELL_RELATIVE_LABELS[index]}
+            </Text>
+          )}
+        </View>
       </View>
 
       {/* Wave visual */}
@@ -740,7 +804,7 @@ function SwellSizeSlider({
 const swellStyles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
     marginBottom: 4,
   },
@@ -749,6 +813,10 @@ const swellStyles = StyleSheet.create({
     fontSize: 11,
     color: '#3CC4C4',
     letterSpacing: 1.5,
+    marginTop: 4,
+  },
+  headerValueGroup: {
+    alignItems: 'flex-end',
   },
   currentValue: {
     fontFamily: 'Georgia',
@@ -764,6 +832,14 @@ const swellStyles = StyleSheet.create({
     fontSize: 12,
     color: '#4A7A87',
     letterSpacing: 0.4,
+  },
+  relativeLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '300',
+    fontSize: 11,
+    color: '#4A7A87',
+    letterSpacing: 0.3,
+    marginTop: 2,
   },
   stage: {
     width: '100%',
@@ -931,6 +1007,7 @@ export default function LogSessionScreen() {
   const [tagSuggestions, setTagSuggestions] = useState<TaggedProfile[]>([])
   const [tagSearching, setTagSearching] = useState(false)
   const tagSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [sessionMinutes, setSessionMinutes] = useState('')
   const [notes,        setNotes]        = useState('')
   const [photos,       setPhotos]       = useState<PickedPhoto[]>([])
   const [isPublic,     setIsPublic]     = useState(true)
@@ -1036,7 +1113,7 @@ export default function LogSessionScreen() {
       const term = `%${q}%`
       let query = supabase
         .from('profiles')
-        .select('id, username, display_name')
+        .select('id, username, display_name, avatar_url')
         .or(`username.ilike.${term},display_name.ilike.${term}`)
         .limit(8)
       if (userId) query = query.neq('id', userId)
@@ -1098,6 +1175,10 @@ export default function LogSessionScreen() {
                 : boardNotes.trim() || null)
             : board.trim() || null,
           tagged_user_ids: taggedUsers.length > 0 ? taggedUsers.map(u => u.id) : null,
+          duration_minutes: (() => {
+            const n = parseInt(sessionMinutes, 10)
+            return Number.isFinite(n) && n > 0 ? Math.min(n, 1440) : null
+          })(),
           notes: notes.trim() || null,
           is_public: isPublic,
         })
@@ -1417,28 +1498,65 @@ export default function LogSessionScreen() {
                   {!tagSearching && tagSuggestions.length === 0 && (
                     <Text style={styles.tagSuggestEmpty}>No matches</Text>
                   )}
-                  {tagSuggestions.map(p => (
-                    <TouchableOpacity
-                      key={p.id}
-                      style={styles.tagSuggestRow}
-                      onPress={() => addTag(p)}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.tagSuggestName}>
-                        {p.display_name || p.username || 'Surfer'}
-                      </Text>
-                      {p.username && p.display_name && (
-                        <Text style={styles.tagSuggestHandle}>@{p.username}</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
+                  {tagSuggestions.map(p => {
+                    const initial = (p.display_name || p.username || '?').trim().charAt(0).toUpperCase()
+                    return (
+                      <TouchableOpacity
+                        key={p.id}
+                        style={styles.tagSuggestRow}
+                        onPress={() => addTag(p)}
+                        activeOpacity={0.7}
+                      >
+                        {p.avatar_url ? (
+                          <Image source={{ uri: p.avatar_url }} style={styles.tagSuggestAvatar} />
+                        ) : (
+                          <View style={styles.tagSuggestAvatar}>
+                            <Text style={styles.tagSuggestAvatarLetter}>{initial}</Text>
+                          </View>
+                        )}
+                        <View style={styles.tagSuggestText}>
+                          <Text style={styles.tagSuggestName}>
+                            {p.display_name || p.username || 'Surfer'}
+                          </Text>
+                          {p.username && p.display_name && (
+                            <Text style={styles.tagSuggestHandle}>@{p.username}</Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )
+                  })}
                 </View>
               )}
             </View>
 
             <View style={styles.fieldBlock}>
+              <SectionLabel>SESSION LENGTH</SectionLabel>
+              <View style={styles.durationRow}>
+                <TextInput
+                  style={styles.durationInput}
+                  placeholder="How long were you in the water?"
+                  placeholderTextColor="#4A7A87"
+                  value={sessionMinutes}
+                  onChangeText={(t) => setSessionMinutes(t.replace(/[^0-9]/g, '').slice(0, 4))}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                />
+                <Text style={styles.durationUnit}>(Minutes)</Text>
+              </View>
+            </View>
+
+            <View style={styles.fieldBlock}>
               <SectionLabel>NOTES</SectionLabel>
               <TextInput style={styles.notesInput} placeholder="How was it..." placeholderTextColor="#4A7A87" value={notes} onChangeText={setNotes} multiline textAlignVertical="top" />
+              <View style={styles.notesPrivacyRow}>
+                <View style={styles.notesPrivacyText}>
+                  <Text style={styles.notesPrivacyLabel}>{isPublic ? 'Public' : 'Private'}</Text>
+                  <Text style={styles.notesPrivacySub}>
+                    Choose whether you want your session notes to be visible to others or keep them private
+                  </Text>
+                </View>
+                <Toggle value={isPublic} onValueChange={setIsPublic} onColor="#1B7A87" offColor="#1B3A45" trackWidth={40} trackHeight={22} />
+              </View>
             </View>
 
             <View style={styles.fieldBlock}>
@@ -1458,16 +1576,6 @@ export default function LogSessionScreen() {
                   </TouchableOpacity>
                 </View>
               </ScrollView>
-            </View>
-
-            <View style={styles.toggleCardLarge}>
-              <View style={styles.toggleCardLeft}>
-                <View>
-                  <Text style={styles.toggleCardLabel}>Public</Text>
-                  <Text style={styles.toggleCardSub}>Shared to your feed</Text>
-                </View>
-              </View>
-              <Toggle value={isPublic} onValueChange={setIsPublic} onColor="#1B7A87" offColor="#1B3A45" trackWidth={40} trackHeight={22} />
             </View>
 
             {error && <Text style={styles.errorText}>{error}</Text>}
@@ -1706,7 +1814,7 @@ const styles = StyleSheet.create({
   step1ContextLine: {
     fontFamily: 'Georgia',
     fontStyle: 'italic',
-    fontSize: 16,
+    fontSize: 32,
     color: '#3CC4C4',
     textAlign: 'center',
     marginBottom: 12,
@@ -1714,8 +1822,8 @@ const styles = StyleSheet.create({
   step1Heading: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 26,
-    lineHeight: 34,
+    fontSize: 34,
+    lineHeight: 42,
     color: '#E8D5B8',
     textAlign: 'center',
   },
@@ -1742,8 +1850,8 @@ const styles = StyleSheet.create({
   stepHeading: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 26,
-    lineHeight: 34,
+    fontSize: 34,
+    lineHeight: 42,
     color: '#E8D5B8',
     textAlign: 'center',
     marginBottom: 16,
@@ -1771,7 +1879,7 @@ const styles = StyleSheet.create({
   fieldBlock: { marginBottom: 20 },
   sectionLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
+    fontSize: 13,
     color: '#4A7A87',
     letterSpacing: 1.5,
     marginBottom: 8,
@@ -1894,9 +2002,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    height: 46,
+    height: 55,
     fontFamily: 'Georgia',
-    fontSize: 13,
+    fontSize: 15,
     color: '#E8D5B8',
   },
   notesInput: {
@@ -1908,10 +2016,63 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontFamily: 'Georgia',
     fontStyle: 'italic',
+    fontSize: 15,
+    color: '#E8D5B8',
+    minHeight: 136,
+    textAlignVertical: 'top',
+  },
+  durationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#0F2838',
+    borderWidth: 0.5,
+    borderColor: 'rgba(74,122,135,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 55,
+  },
+  durationInput: {
+    flex: 1,
+    fontFamily: 'Georgia',
+    fontSize: 15,
+    color: '#E8D5B8',
+    paddingVertical: 0,
+  },
+  durationUnit: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 15,
+    color: '#4A7A87',
+    letterSpacing: 0.5,
+  },
+  notesPrivacyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#0F2838',
+    borderWidth: 0.5,
+    borderColor: 'rgba(74,122,135,0.3)',
+    borderRadius: 12,
+  },
+  notesPrivacyText: {
+    flex: 1,
+  },
+  notesPrivacyLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
     fontSize: 13,
     color: '#E8D5B8',
-    minHeight: 80,
-    textAlignVertical: 'top',
+    marginBottom: 2,
+  },
+  notesPrivacySub: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '300',
+    fontSize: 11,
+    color: '#4A7A87',
+    lineHeight: 15,
   },
 
   // Tag chips + autocomplete
@@ -1955,10 +2116,30 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   tagSuggestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 0.5,
     borderBottomColor: 'rgba(74,122,135,0.18)',
+  },
+  tagSuggestAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#1B7A87',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tagSuggestAvatarLetter: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontSize: 13,
+    color: '#E8D5B8',
+  },
+  tagSuggestText: {
+    flex: 1,
   },
   tagSuggestName: {
     fontFamily: 'Helvetica Neue',
@@ -2156,8 +2337,8 @@ const styles = StyleSheet.create({
   step3Heading: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 26,
-    lineHeight: 34,
+    fontSize: 34,
+    lineHeight: 42,
     color: '#E8D5B8',
     textAlign: 'center',
     marginBottom: 20,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useState } from 'react'
 import {
   ActivityIndicator,
   Alert,
@@ -14,7 +14,7 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
@@ -287,7 +287,7 @@ export default function FeedScreen() {
   const [feedState, setFeedState] = useState<FeedState>('loading')
   const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useFocusEffect(useCallback(() => { load() }, []))
 
   // ─── Data fetching ──────────────────────────────────────────────────────────
 

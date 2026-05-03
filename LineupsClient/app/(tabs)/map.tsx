@@ -942,7 +942,17 @@ export default function MapScreen() {
                 <Text style={styles.ctaPrimaryText}>Log session</Text>
               </TouchableOpacity>
             )}
-            <TouchableOpacity style={styles.ctaSecondary} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={styles.ctaSecondary}
+              activeOpacity={0.8}
+              onPress={() => {
+                dismissCallout()
+                router.push({
+                  pathname: '/break-detail',
+                  params: { id: selectedBreak.id, name: selectedBreak.name },
+                })
+              }}
+            >
               <Text style={styles.ctaSecondaryText}>View break</Text>
             </TouchableOpacity>
           </View>

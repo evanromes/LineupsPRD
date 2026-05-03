@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useState } from 'react'
+import { useCallback, useEffect, useRef, useMemo, useState } from 'react'
 import {
   Animated,
   ActivityIndicator,
@@ -14,14 +14,14 @@ import {
   View,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { router } from 'expo-router'
+import { router, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import Svg, { Text as SvgText, Path } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type FilterTab = 'Visited' | 'Favorites' | 'Wishlist' | 'All'
+type FilterTab = 'Visited' | 'Favorites' | 'Wishlist'
 
 interface BreakItem {
   id: string
@@ -45,7 +45,7 @@ interface Section {
   data: BreakItem[]
 }
 
-const FILTERS: FilterTab[] = ['Visited', 'Favorites', 'Wishlist', 'All']
+const FILTERS: FilterTab[] = ['Visited', 'Favorites', 'Wishlist']
 
 // ─── Region lookup ────────────────────────────────────────────────────────────
 
@@ -157,13 +157,9 @@ function BreakCard({ item, rank }: { item: BreakItem; rank: number }) {
         </View>
         {item.sessionCount > 0 && (
           <View style={styles.sessionStatsRow}>
-            <Text style={styles.sessionStatText}>{item.sessionCount} sessions</Text>
-            {item.avgSessionRating != null && (
-              <>
-                <Text style={styles.sessionStatText}> · </Text>
-                <Text style={styles.sessionAvgText}>{item.avgSessionRating.toFixed(1)} avg</Text>
-              </>
-            )}
+            <Text style={styles.sessionStatText}>
+              {item.sessionCount} {item.sessionCount === 1 ? 'Session' : 'Sessions'}
+            </Text>
           </View>
         )}
       </View>
@@ -181,6 +177,11 @@ function BreakCard({ item, rank }: { item: BreakItem; rank: number }) {
           </View>
         )}
         {item.isWishlisted && !item.isVisited && <View style={styles.wishDot} />}
+        {item.sessionCount > 0 && item.avgSessionRating != null && (
+          <Text style={styles.avgSessionRightText}>
+            Average Session: {item.avgSessionRating.toFixed(1)}
+          </Text>
+        )}
       </View>
     </TouchableOpacity>
   )
@@ -506,7 +507,7 @@ export default function BreaksScreen() {
     }).start()
   }, [activeFilter, tabContainerWidth])
 
-  useEffect(() => { fetchData() }, [])
+  useFocusEffect(useCallback(() => { fetchData() }, []))
 
   async function fetchData() {
     try {
@@ -601,7 +602,7 @@ export default function BreaksScreen() {
       if (activeFilter === 'Visited')   return b.isVisited
       if (activeFilter === 'Favorites') return b.isFavorite
       if (activeFilter === 'Wishlist')  return b.isWishlisted
-      return true
+      return false
     })
 
     const q = query.trim().toLowerCase()
@@ -992,7 +993,6 @@ const styles = StyleSheet.create({
 
   sessionStatsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   sessionStatText: { fontFamily: 'Helvetica Neue', fontSize: 10, color: '#4A7A87' },
-  sessionAvgText: { fontFamily: 'Helvetica Neue', fontWeight: '500', fontSize: 10, color: '#3CC4C4' },
 
   ratingBlock: { alignItems: 'flex-end', gap: 4 },
   breakRatingLabel: {
@@ -1015,4 +1015,12 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
   wishDot: { width: 9, height: 9, borderRadius: 4.5, backgroundColor: '#4A7A87' },
+
+  avgSessionRightText: {
+    fontFamily: 'Helvetica Neue',
+    fontWeight: '500',
+    fontSize: 9,
+    color: '#3CC4C4',
+    letterSpacing: 0.2,
+  },
 })

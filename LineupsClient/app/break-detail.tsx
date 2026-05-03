@@ -413,7 +413,11 @@ export default function BreakDetailScreen() {
                 <Text style={styles.editRatingLabel}>Your break rating</Text>
                 <DotRating rating={userRating?.rating ?? 0} size={8} />
                 <Text style={styles.editRatingLink}>
-                  {editRatingExpanded ? 'Cancel' : 'Edit →'}
+                  {editRatingExpanded
+                    ? 'Cancel'
+                    : (userRating?.rating ?? 0) > 0
+                      ? 'Re-rate →'
+                      : 'Rate →'}
                 </Text>
               </TouchableOpacity>
 
