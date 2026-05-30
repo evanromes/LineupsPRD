@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Animated,
   ActivityIndicator,
@@ -15,6 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import Svg, { Text as SvgText, Path } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
+import { BoardIcon, type BoardValue } from '../onboarding/board'
 
 // ─── Wordmark ─────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,27 @@ interface Profile {
   display_name: string | null
   bio: string | null
   created_at: string | null
+  stance: 'regular' | 'goofy' | null
+  preferred_board: BoardValue
+  home_break: string | null
+}
+
+function humanizeBoard(value: BoardValue): string {
+  switch (value) {
+    case 'shortboard': return 'Shortboard'
+    case 'mid-length': return 'Mid-Length'
+    case 'longboard':  return 'Longboard'
+    case 'gun':        return 'Gun'
+    case 'sup':        return 'SUP'
+    case 'foil':       return 'Foil'
+    default:           return ''
+  }
+}
+
+function humanizeStance(value: 'regular' | 'goofy' | null | undefined): string {
+  if (value === 'regular') return 'Regular'
+  if (value === 'goofy')   return 'Goofy'
+  return ''
 }
 
 interface RatedBreak {
@@ -103,9 +125,28 @@ interface WishlistBreak {
   } | null
 }
 
+interface SessionRow {
+  id: string
+  date: string
+  rating: number | null
+  swell_size: string | null
+  duration_minutes: number | null
+  break_id: string
+  breaks: {
+    name: string
+    lat: number
+    lng: number
+  } | null
+}
+
 interface RegionGroup {
   region: string
   items: RatedBreak[]
+}
+
+interface SessionMonthGroup {
+  label: string  // e.g. "MAY 2026"
+  items: SessionRow[]
 }
 
 // ─── Shared components ────────────────────────────────────────────────────────
@@ -261,16 +302,106 @@ function WishlistTab({ items }: { items: WishlistBreak[] }) {
   )
 }
 
+// ─── Sessions tab ─────────────────────────────────────────────────────────────
+
+function SessionsTab({ sessions }: { sessions: SessionRow[] }) {
+  const groups: SessionMonthGroup[] = useMemo(() => {
+    const map = new Map<string, SessionRow[]>()
+    for (const s of sessions) {
+      if (!s.date) continue
+      const d = new Date(s.date)
+      if (Number.isNaN(d.getTime())) continue
+      const label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }).toUpperCase()
+      const list = map.get(label) ?? []
+      list.push(s)
+      map.set(label, list)
+    }
+    return [...map.entries()].map(([label, items]) => ({ label, items }))
+  }, [sessions])
+
+  if (sessions.length === 0) {
+    return <Text style={styles.emptyTabText}>No sessions logged yet.</Text>
+  }
+
+  return (
+    <>
+      {groups.map(({ label, items }) => (
+        <View key={label}>
+          <View style={styles.regionRow}>
+            <Text style={styles.regionLabel}>{label} · {items.length}</Text>
+          </View>
+          {items.map(s => (
+            <SessionRowItem key={s.id} session={s} />
+          ))}
+        </View>
+      ))}
+    </>
+  )
+}
+
+function SessionRowItem({ session }: { session: SessionRow }) {
+  const b = session.breaks
+  const date = new Date(session.date)
+  const dayLabel = Number.isNaN(date.getTime())
+    ? session.date
+    : date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+
+  return (
+    <TouchableOpacity
+      style={styles.sessionRow}
+      activeOpacity={0.6}
+      onPress={() =>
+        b && router.push({ pathname: '/break-detail', params: { id: session.break_id, name: b.name } })
+      }
+    >
+      <View style={styles.sessionDateCol}>
+        <Text style={styles.sessionDate}>{dayLabel}</Text>
+      </View>
+      <View style={styles.sessionInfo}>
+        <Text style={styles.sessionBreak} numberOfLines={1}>{b?.name ?? 'Unknown break'}</Text>
+        <View style={styles.sessionMetaRow}>
+          {!!session.swell_size && (
+            <Text style={styles.sessionMetaText}>{session.swell_size}</Text>
+          )}
+          {!!session.duration_minutes && (
+            <>
+              {!!session.swell_size && <Text style={styles.sessionMetaDot}> · </Text>}
+              <Text style={styles.sessionMetaText}>{formatDuration(session.duration_minutes)}</Text>
+            </>
+          )}
+        </View>
+      </View>
+      <View style={styles.sessionRatingCol}>
+        {session.rating != null && session.rating > 0 ? (
+          <Text style={styles.sessionRating}>{session.rating}/10</Text>
+        ) : (
+          <Text style={styles.sessionRatingMuted}>—</Text>
+        )}
+      </View>
+    </TouchableOpacity>
+  )
+}
+
+function formatDuration(mins: number): string {
+  if (mins >= 60) {
+    const h = Math.floor(mins / 60)
+    const m = mins % 60
+    return m === 0 ? `${h}h` : `${h}h ${m}m`
+  }
+  return `${mins}m`
+}
+
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
-const TABS: TabKey[] = ['breaks', 'wishlist']
-type TabKey = 'breaks' | 'wishlist'
+const TABS: TabKey[] = ['breaks', 'sessions', 'wishlist']
+type TabKey = 'breaks' | 'sessions' | 'wishlist'
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets()
   const params = useLocalSearchParams<{ userId?: string }>()
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [viewedUserId,  setViewedUserId]  = useState<string | null>(null)
   const [isOwnProfile,  setIsOwnProfile]  = useState(true)
   const [loading, setLoading]             = useState(true)
   const [activeTab, setActiveTab]         = useState<TabKey>('breaks')
@@ -282,6 +413,7 @@ export default function ProfileScreen() {
   const [followerCount,  setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount]= useState(0)
   const [ratings,        setRatings]       = useState<RatedBreak[]>([])
+  const [userSessions,   setUserSessions]  = useState<SessionRow[]>([])
   const [wishlist,       setWishlist]      = useState<WishlistBreak[]>([])
   const [isFollowing,    setIsFollowing]   = useState(false)
   const [followLoading,  setFollowLoading] = useState(false)
@@ -312,6 +444,7 @@ export default function ProfileScreen() {
     const targetId = params.userId && params.userId !== selfId ? params.userId : selfId
     const own = !params.userId || params.userId === selfId
     setIsOwnProfile(own)
+    setViewedUserId(targetId ?? null)
 
     if (!targetId) { setLoading(false); return }
     await fetchAll(targetId, selfId, own)
@@ -321,6 +454,7 @@ export default function ProfileScreen() {
     try {
       const [
         { data: profileData },
+        { data: metaData },
         { data: sessionData },
         { data: ratingData },
         { data: wishlistData },
@@ -328,18 +462,30 @@ export default function ProfileScreen() {
         { count: followingCnt },
       ] = await Promise.all([
         supabase.from('profiles').select('username, display_name, bio, created_at').eq('id', targetId).single(),
-        supabase.from('sessions').select('break_id, rating').eq('user_id', targetId),
+        supabase.from('profiles').select('stance, preferred_board, home_break').eq('id', targetId).maybeSingle(),
+        supabase.from('sessions').select('id, date, rating, swell_size, duration_minutes, break_id, breaks(name, lat, lng)').eq('user_id', targetId).order('date', { ascending: false }),
         supabase.from('break_ratings').select('break_id, rating, approx_sessions, is_favorite, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
         supabase.from('wishlist').select('break_id, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetId),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetId),
       ])
 
-      if (profileData) setProfile(profileData as Profile)
+      if (profileData) {
+        const meta = (metaData ?? {}) as Partial<Profile>
+        setProfile({
+          ...profileData,
+          stance: meta.stance ?? null,
+          preferred_board: meta.preferred_board ?? null,
+          home_break: meta.home_break ?? null,
+        } as Profile)
+      }
 
-      const sessions = (sessionData ?? []) as Array<{ break_id: string; rating: number | null }>
+      const sessions = (sessionData ?? []) as unknown as SessionRow[]
+      setUserSessions(sessions)
       setSurfCount(sessions.length)
-      const distinctBreaks = new Set(sessions.map(s => s.break_id).filter(Boolean))
+      const distinctBreaks = new Set(
+        ((ratingData ?? []) as Array<{ break_id: string }>).map(r => r.break_id).filter(Boolean)
+      )
       setBreakCount(distinctBreaks.size)
 
       const sessionCountMap = new Map<string, number>()
@@ -442,8 +588,9 @@ export default function ProfileScreen() {
         </View>
       ) : (
         <ScrollView
+          style={{ flex: 1 }}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
+          contentContainerStyle={{ paddingBottom: 20 }}
         >
           {/* ── Profile card ── */}
           <View style={styles.card}>
@@ -463,7 +610,7 @@ export default function ProfileScreen() {
               </View>
               <View style={styles.statsRow}>
                 {([
-                  { value: surfCount,    label: 'SURFS' },
+                  { value: surfCount,    label: 'SESSIONS' },
                   { value: breakCount,   label: 'BREAKS' },
                   { value: countryCount, label: 'REGIONS' },
                 ] as const).map(({ value, label }) => (
@@ -480,16 +627,96 @@ export default function ProfileScreen() {
               {!!profile?.bio?.trim() && (
                 <Text style={styles.bioText}>{profile.bio.trim()}</Text>
               )}
+
+              {/* Surfer meta row: board · stance · home break */}
+              {(profile?.preferred_board || profile?.stance || profile?.home_break) && (() => {
+                const items: { key: string; node: React.ReactNode; flex?: boolean }[] = []
+                if (profile?.preferred_board) {
+                  items.push({
+                    key: 'board',
+                    node: (
+                      <View style={styles.metaItem}>
+                        <BoardIcon value={profile.preferred_board} selected width={11} height={20} />
+                        <Text style={styles.metaLabel} numberOfLines={1}>
+                          {humanizeBoard(profile.preferred_board)}
+                        </Text>
+                      </View>
+                    ),
+                  })
+                }
+                if (profile?.stance) {
+                  items.push({
+                    key: 'stance',
+                    node: (
+                      <View style={styles.metaItem}>
+                        <Ionicons name="footsteps-outline" size={14} color="#4A7A87" />
+                        <Text style={styles.metaLabel} numberOfLines={1}>
+                          {humanizeStance(profile.stance)}
+                        </Text>
+                      </View>
+                    ),
+                  })
+                }
+                if (profile?.home_break) {
+                  items.push({
+                    key: 'home',
+                    flex: true,
+                    node: (
+                      <View style={[styles.metaItem, styles.metaItemFlex]}>
+                        <Ionicons name="location-outline" size={14} color="#4A7A87" />
+                        <Text style={styles.metaLabel} numberOfLines={1}>
+                          {profile.home_break}
+                        </Text>
+                      </View>
+                    ),
+                  })
+                }
+                return (
+                  <View style={styles.metaRow}>
+                    {items.map((item, i) => (
+                      <Fragment key={item.key}>
+                        {item.node}
+                        {i < items.length - 1 && <Text style={styles.metaDot}>·</Text>}
+                      </Fragment>
+                    ))}
+                  </View>
+                )
+              })()}
+
               <View style={styles.followRow}>
                 <View style={styles.followLeft}>
-                  <Text style={styles.followMuted}>
-                    <Text style={styles.followNum}>{followerCount}</Text>
-                    {' followers'}
-                  </Text>
-                  <Text style={styles.followMuted}>
-                    <Text style={styles.followNum}>{followingCount}</Text>
-                    {' following'}
-                  </Text>
+                  <TouchableOpacity
+                    onPress={() =>
+                      viewedUserId &&
+                      router.push({
+                        pathname: '/follows-list',
+                        params: { userId: viewedUserId, type: 'followers' },
+                      })
+                    }
+                    activeOpacity={0.7}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.followMuted}>
+                      <Text style={styles.followNum}>{followerCount}</Text>
+                      {' followers'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() =>
+                      viewedUserId &&
+                      router.push({
+                        pathname: '/follows-list',
+                        params: { userId: viewedUserId, type: 'following' },
+                      })
+                    }
+                    activeOpacity={0.7}
+                    hitSlop={6}
+                  >
+                    <Text style={styles.followMuted}>
+                      <Text style={styles.followNum}>{followingCount}</Text>
+                      {' following'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
                 {!!profile?.created_at && (
                   <Text style={styles.memberSince}>
@@ -559,24 +786,28 @@ export default function ProfileScreen() {
           <View style={styles.tabContent}>
             {activeTab === 'breaks'
               ? <BreaksTab ratings={ratings} />
-              : <WishlistTab items={wishlist} />
+              : activeTab === 'sessions'
+                ? <SessionsTab sessions={userSessions} />
+                : <WishlistTab items={wishlist} />
             }
           </View>
-
-          {/* ── Sign out ── */}
-          {isOwnProfile && (
-            <TouchableOpacity
-              style={styles.signOutButton}
-              activeOpacity={0.7}
-              onPress={async () => {
-                await supabase.auth.signOut()
-                router.replace('/(auth)/login')
-              }}
-            >
-              <Text style={styles.signOutText}>Sign out</Text>
-            </TouchableOpacity>
-          )}
         </ScrollView>
+      )}
+
+      {/* ── Sign out (sticky footer, own profile only) ── */}
+      {isOwnProfile && !loading && (
+        <View style={styles.signOutFooter}>
+          <TouchableOpacity
+            style={styles.signOutButton}
+            activeOpacity={0.7}
+            onPress={async () => {
+              await supabase.auth.signOut()
+              router.replace('/(auth)/login')
+            }}
+          >
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
       )}
     </View>
   )
@@ -658,12 +889,12 @@ const styles = StyleSheet.create({
   statValue: {
     fontFamily: 'Georgia',
     fontWeight: '700',
-    fontSize: 22,
+    fontSize: 25,
     color: '#E8D5B8',
   },
   statLabel: {
     fontFamily: 'Helvetica Neue',
-    fontSize: 11,
+    fontSize: 13,
     color: '#4A7A87',
     letterSpacing: 1.2,
     marginTop: 2,
@@ -719,6 +950,39 @@ const styles = StyleSheet.create({
     fontFamily: 'Helvetica Neue',
     fontSize: 14,
     color: '#4A7A87',
+  },
+
+  // Surfer meta row (board · stance · home break)
+  metaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    marginTop: 10,
+    marginBottom: 10,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(74,122,135,0.3)',
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.3)',
+  },
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  metaItemFlex: {
+    flexShrink: 1,
+  },
+  metaLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 13,
+    color: '#E8D5B8',
+    letterSpacing: 0.2,
+  },
+  metaDot: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 13,
+    color: '#4A7A87',
+    marginHorizontal: 8,
   },
 
   // Buttons
@@ -822,11 +1086,75 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 
-  // Sign out
+  // Session row
+  sessionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.18)',
+  },
+  sessionDateCol: {
+    width: 56,
+    alignItems: 'center',
+  },
+  sessionDate: {
+    fontFamily: 'Georgia',
+    fontSize: 13,
+    color: '#4A7A87',
+    letterSpacing: 0.4,
+  },
+  sessionInfo: {
+    flex: 1,
+  },
+  sessionBreak: {
+    fontFamily: 'Georgia',
+    fontSize: 16,
+    color: '#E8D5B8',
+    marginBottom: 4,
+  },
+  sessionMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  sessionMetaText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#4A7A87',
+  },
+  sessionMetaDot: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 12,
+    color: '#4A7A87',
+  },
+  sessionRatingCol: {
+    minWidth: 44,
+    alignItems: 'flex-end',
+  },
+  sessionRating: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#3CC4C4',
+  },
+  sessionRatingMuted: {
+    fontFamily: 'Georgia',
+    fontSize: 14,
+    color: '#4A7A87',
+  },
+
+  // Sign out (sticky footer)
+  signOutFooter: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    backgroundColor: '#0B2230',
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(74,122,135,0.2)',
+  },
   signOutButton: {
-    marginHorizontal: 20,
-    marginTop: 28,
-    marginBottom: 12,
     borderWidth: 0.5,
     borderColor: 'rgba(224,112,112,0.5)',
     borderRadius: 10,

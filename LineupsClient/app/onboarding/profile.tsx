@@ -185,9 +185,12 @@ export default function OnboardingProfile() {
       return
     }
 
-    // Store email separately — silently ignored if column doesn't exist yet
     if (userEmail) {
-      await supabase.from('profiles').update({ email: userEmail }).eq('id', userId)
+      const { error: emailError } = await supabase
+        .from('profiles')
+        .update({ email: userEmail })
+        .eq('id', userId)
+      if (emailError) console.warn('[onboarding/profile] failed to save email (column may not exist yet):', emailError)
     }
     router.replace('/onboarding/stance')
   }

@@ -127,10 +127,11 @@ export default function OnboardingExperience() {
   async function handleNext() {
     if (!selected || !userId) return
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ experience_level: selected })
       .eq('id', userId)
+    if (error) console.error('[onboarding/stance] failed to save experience_level:', error)
     setSaving(false)
     router.push('/onboarding/stance-screen')
   }

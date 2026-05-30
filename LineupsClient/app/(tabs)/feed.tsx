@@ -16,14 +16,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { router, useFocusEffect } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
-import Svg, { Path, Circle, Text as SvgText } from 'react-native-svg'
+import Svg, { Path, Text as SvgText } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
 
 // ─── Wordmark ─────────────────────────────────────────────────────────────────
 
-function LineupsWordmark() {
+function LineupsWordmark({ width = 95, height = 44 }: { width?: number; height?: number }) {
   return (
-    <Svg width={95} height={44} viewBox="20 120 360 185">
+    <Svg width={width} height={height} viewBox="20 120 360 185">
       <SvgText x="200" y="195" fontFamily="Georgia, serif" fontSize="71" fontWeight="700"
         fill="#E8D5B8" textAnchor="middle" letterSpacing="2">Lineups</SvgText>
       <Path d="M60 240 Q130 224,200 240 Q270 256,340 240" fill="none" stroke="#3CC4C4" strokeWidth="3.5" strokeLinecap="round" />
@@ -119,19 +119,6 @@ function Pill({ label, bgColor, textColor }: { label: string; bgColor: string; t
   )
 }
 
-// ─── Empty state wave illustration ───────────────────────────────────────────
-
-function WaveIllustration() {
-  return (
-    <Svg width={64} height={64} viewBox="0 0 64 64">
-      <Circle cx={32} cy={32} r={32} fill="#1B7A87" />
-      <Path d="M12 30 Q22 20, 32 30 Q42 40, 52 30" stroke="#E8D5B8" strokeWidth={2.5} fill="none" strokeLinecap="round" />
-      <Path d="M12 38 Q22 28, 32 38 Q42 48, 52 38" stroke="#E8D5B8" strokeWidth={1.8} fill="none" strokeLinecap="round" opacity={0.6} />
-      <Path d="M16 46 Q26 36, 32 42 Q38 48, 48 42" stroke="#E8D5B8" strokeWidth={1.2} fill="none" strokeLinecap="round" opacity={0.3} />
-    </Svg>
-  )
-}
-
 // ─── Feed Card ────────────────────────────────────────────────────────────────
 
 function FeedCard({
@@ -160,7 +147,7 @@ function FeedCard({
           style={styles.authorLeft}
           activeOpacity={0.75}
           onPress={() =>
-            router.push({ pathname: '/(tabs)/profile', params: { userId: session.user_id } })
+            router.push({ pathname: '/user-profile', params: { userId: session.user_id } })
           }
         >
           <Avatar username={username} displayName={displayName} />
@@ -407,7 +394,7 @@ export default function FeedScreen() {
           contentContainerStyle={styles.emptyWrap}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#3CC4C4" />}
         >
-          <WaveIllustration />
+          <LineupsWordmark width={220} height={102} />
           <Text style={styles.emptyTitle}>Your feed is empty</Text>
           <Text style={styles.emptySubtitle}>
             Follow other surfers to see their sessions here

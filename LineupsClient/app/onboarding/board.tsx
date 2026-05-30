@@ -11,30 +11,36 @@ import Svg, { Ellipse, Line, Path } from 'react-native-svg'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 
-type BoardValue = 'shortboard' | 'longboard' | 'mid-length' | 'gun' | 'sup' | 'foil' | null
+export type BoardValue = 'shortboard' | 'longboard' | 'mid-length' | 'gun' | 'sup' | 'foil' | null
 
 const OPTIONS: { value: BoardValue; label: string; description?: string }[] = [
   { value: 'shortboard', label: 'Shortboard' },
   { value: 'mid-length', label: 'Mid-Length' },
   { value: 'longboard',  label: 'Longboard'  },
-  {
-    value: 'gun',
-    label: 'Gun',
-    description: "For big-wave days — paddles fast and holds in steep, powerful surf",
-  },
-  { value: 'sup',  label: 'SUP'  },
-  { value: 'foil', label: 'Foil' },
+  { value: 'gun',        label: 'Gun'        },
+  { value: 'sup',        label: 'SUP'        },
+  { value: 'foil',       label: 'Foil'       },
   {
     value: null,
     label: 'N/A',
-    description: "You ride multiple boards or have no preference — this won't show on your profile",
+    description: "No preference — won't show on your profile",
   },
 ]
 
-function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }) {
+export function BoardIcon({
+  value,
+  selected,
+  width = 32,
+  height = 60,
+}: {
+  value: BoardValue
+  selected: boolean
+  width?: number
+  height?: number
+}) {
   if (value === 'shortboard') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Ellipse
           cx={32} cy={54} rx={6.5} ry={26}
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -53,7 +59,7 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
   }
   if (value === 'mid-length') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Ellipse
           cx={32} cy={52} rx={8} ry={33}
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -72,7 +78,7 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
   }
   if (value === 'longboard') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Ellipse
           cx={32} cy={51} rx={9.5} ry={51}
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -91,7 +97,7 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
   }
   if (value === 'gun') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Path
           d="M 32 8 Q 26 25 25 50 Q 25 75 30 90 Q 32 92 34 90 Q 39 75 39 50 Q 38 25 32 8 Z"
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -112,7 +118,7 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
   }
   if (value === 'sup') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Ellipse
           cx={26} cy={51} rx={10.5} ry={51}
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -143,7 +149,7 @@ function BoardIcon({ value, selected }: { value: BoardValue; selected: boolean }
   }
   if (value === 'foil') {
     return (
-      <Svg width={32} height={60} viewBox="0 0 64 104">
+      <Svg width={width} height={height} viewBox="0 0 64 104">
         <Ellipse
           cx={32} cy={38} rx={6.5} ry={24}
           fill={selected ? '#0F4E63' : 'rgba(197,168,130,0.25)'}
@@ -235,10 +241,11 @@ export default function OnboardingBoard() {
   async function handleNext() {
     if (selected === undefined || !userId) return
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ preferred_board: selected })
       .eq('id', userId)
+    if (error) console.error('[onboarding/board] failed to save preferred_board:', error)
     setSaving(false)
     router.push('/onboarding/homebreak')
   }
@@ -286,7 +293,7 @@ export default function OnboardingBoard() {
                   </View>
                   {opt.value !== null && (
                     <View style={styles.iconWrap}>
-                      <BoardIcon value={opt.value} selected={isSelected} />
+                      <BoardIcon value={opt.value} selected={isSelected} width={28} height={53} />
                     </View>
                   )}
                   <View style={[styles.radio, isSelected && styles.radioSelected]}>
@@ -351,41 +358,45 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-start',
     alignItems: 'center',
-    paddingTop: 96,
-    paddingBottom: 16,
+    paddingTop: 76,
+    paddingBottom: 8,
   },
 
   heading: {
     fontFamily: 'Georgia',
     fontWeight: 'bold',
-    fontSize: 38,
+    fontSize: 32,
     color: '#E8D5B8',
     textAlign: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   subtext: {
     fontFamily: 'Helvetica Neue',
     fontWeight: '300',
-    fontSize: 20,
+    fontSize: 16,
     color: '#4A7A87',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   cardList: {
     width: '100%',
+    flex: 1,
+    marginBottom: 12,
   },
   card: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 10,
     backgroundColor: 'rgba(42, 26, 8, 0.35)',
     borderWidth: 0.5,
     borderColor: 'rgba(197, 168, 130, 0.4)',
     borderRadius: 12,
-    padding: 13,
-    marginBottom: 8,
-    minHeight: 68,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginBottom: 6,
+    minHeight: 54,
   },
   cardSelected: {
     backgroundColor: '#0F4E63',
@@ -397,9 +408,8 @@ const styles = StyleSheet.create({
   cardLabel: {
     fontFamily: 'Georgia',
     fontWeight: 'bold',
-    fontSize: 19,
+    fontSize: 20,
     color: '#C5A882',
-    marginBottom: 3,
   },
   cardLabelSelected: {
     color: '#3CC4C4',
@@ -407,20 +417,21 @@ const styles = StyleSheet.create({
   cardDesc: {
     fontFamily: 'Helvetica Neue',
     fontWeight: '300',
-    fontSize: 12,
+    fontSize: 11,
     color: '#4A7A87',
-    lineHeight: 16,
+    lineHeight: 14,
+    marginTop: 4,
   },
   cardDescSelected: {
     color: '#7AABB8',
   },
 
   iconWrap: {
-    width: 32,
-    height: 60,
+    width: 33,
+    height: 55,
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 14,
+    marginRight: 8,
   },
 
   radio: {

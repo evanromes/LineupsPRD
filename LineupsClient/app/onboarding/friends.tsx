@@ -268,12 +268,14 @@ export default function OnboardingFriends() {
     setFollowState((prev) => new Map(prev).set(targetId, !currentlyFollowing))
 
     if (currentlyFollowing) {
-      await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', targetId)
+      const { error } = await supabase.from('follows').delete().eq('follower_id', userId).eq('following_id', targetId)
+      if (error) console.error('[onboarding/friends] failed to unfollow:', error)
     } else {
-      await supabase.from('follows').upsert(
+      const { error } = await supabase.from('follows').upsert(
         { follower_id: userId, following_id: targetId },
         { onConflict: 'follower_id,following_id' }
       )
+      if (error) console.error('[onboarding/friends] failed to follow:', error)
     }
   }
 

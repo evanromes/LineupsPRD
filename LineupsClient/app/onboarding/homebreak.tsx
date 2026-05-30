@@ -131,10 +131,11 @@ export default function OnboardingHomeBreak() {
     if (!userId) return
     setSaving(true)
     if (!skip && selected) {
-      await supabase
+      const { error } = await supabase
         .from('profiles')
         .update({ home_break: selected.name })
         .eq('id', userId)
+      if (error) console.error('[onboarding/homebreak] failed to save home_break:', error)
     }
     setSaving(false)
     router.push('/onboarding/contacts')

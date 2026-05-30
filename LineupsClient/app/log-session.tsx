@@ -1149,6 +1149,11 @@ export default function LogSessionScreen() {
 
   async function handleSave() {
     if (!break_id) { setError('No break selected.'); return }
+    const minutesNum = parseInt(sessionMinutes, 10)
+    if (!Number.isFinite(minutesNum) || minutesNum <= 0) {
+      setError('Please enter how long you were in the water.')
+      return
+    }
     setSaving(true)
     setError(null)
 
@@ -1423,11 +1428,13 @@ export default function LogSessionScreen() {
             </View>
 
             <View style={styles.step3Buttons}>
-              <TouchableOpacity style={styles.primaryButton} onPress={() => setStep(5)} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>Next →</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.cancelButton} onPress={() => setStep(5)} activeOpacity={0.7}>
-                <Text style={styles.cancelButtonText}>Skip</Text>
+              <TouchableOpacity
+                style={[styles.primaryButton, (!wind || !crowdFactor) && styles.primaryButtonDisabled]}
+                onPress={() => wind && crowdFactor && setStep(5)}
+                activeOpacity={wind && crowdFactor ? 0.85 : 1}
+                disabled={!wind || !crowdFactor}
+              >
+                <Text style={[styles.primaryButtonText, (!wind || !crowdFactor) && styles.primaryButtonTextDisabled]}>Next →</Text>
               </TouchableOpacity>
             </View>
           </ScrollView>
@@ -1580,7 +1587,15 @@ export default function LogSessionScreen() {
 
             {error && <Text style={styles.errorText}>{error}</Text>}
 
-            <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving} activeOpacity={0.85}>
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                (saving || !sessionMinutes || parseInt(sessionMinutes, 10) <= 0) && { opacity: 0.5 },
+              ]}
+              onPress={handleSave}
+              disabled={saving || !sessionMinutes || parseInt(sessionMinutes, 10) <= 0}
+              activeOpacity={0.85}
+            >
               {saving ? <ActivityIndicator color="#E8D5B8" /> : <Text style={styles.saveButtonText}>Save session</Text>}
             </TouchableOpacity>
           </ScrollView>

@@ -91,10 +91,11 @@ export default function OnboardingStanceScreen() {
   async function handleNext() {
     if (selected === undefined || !userId) return
     setSaving(true)
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({ stance: selected })
       .eq('id', userId)
+    if (error) console.error('[onboarding/stance-screen] failed to save stance:', error)
     setSaving(false)
     router.push('/onboarding/board')
   }
