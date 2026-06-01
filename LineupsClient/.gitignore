@@ -40,3 +40,8 @@ yarn-error.*
 /ios
 /android
 .env
+
+# Natural Earth source files (re-downloadable; vendored TopoJSON is what
+# the app uses at runtime — see scripts/simplify-world.sh and the
+# Travels Globe section of the README)
+assets/world/*.geojson.bak

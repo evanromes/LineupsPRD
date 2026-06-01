@@ -10,10 +10,14 @@ Lineups is a surf session tracking app. Users log surf sessions, rate breaks, an
 
 | Layer | Choice |
 |---|---|
-| Framework | React Native + Expo SDK 54 |
+| Framework | React Native 0.81 + Expo SDK 54 |
 | Language | TypeScript (strict) |
 | Routing | expo-router (file-based) |
-| Backend | Supabase (auth, database, storage) |
+| Backend | Supabase (auth, Postgres, storage, RLS) |
+| Maps | `react-native-maps` + `react-native-map-clustering` |
+| SVG / Graphics | `react-native-svg` (board icons, wordmark, globes) |
+| Gestures | `react-native-gesture-handler` + `react-native-reanimated` + `react-native-worklets` |
+| Geo (globe feature) | `d3-geo`, `topojson-client`, `mapshaper` (build-step CLI) |
 | Target | iOS, Android, Web |
 
 ---
@@ -51,11 +55,13 @@ Lineups uses a **dark navy** theme throughout. The infrastructure for a user-con
 ## Navigation Tabs (5)
 
 ```
-Feed → Breaks → Map → Journal → Profile
+Feed → Breaks → Map → Search → Profile
 ```
 
 Tab bar: `#060F14` bg, `#3CC4C4` active, `#2A5A65` inactive, height 80.
 Breaks tab uses a custom SVG wave icon (two wave Bezier paths).
+
+`Search` provides cross-user discovery (find surfers, breaks). Replaced an earlier `Journal` tab; logging happens directly from map callouts and break detail pages now.
 
 ---
 
@@ -89,21 +95,23 @@ Four option cards: **Beginner / Intermediate / Advanced / Pro**. Saves `experien
 Three option cards: **Regular / Goofy / N/A**. `null` = N/A (valid selection). Saves `stance`.
 
 #### 6. `onboarding/board.tsx` — *"What's your board of choice?"*
-Seven option cards with SVG board silhouette icons:
+Seven option cards stacked vertically, each containing a board-silhouette SVG icon on the left and a large label. Cards are sized to fill the available vertical space so the Continue button rests at the bottom — no scrolling needed.
 
 | Option | Value | Icon |
 |---|---|---|
 | Shortboard | `shortboard` | Narrow ellipse |
 | Mid-Length | `mid-length` | Medium ellipse with stringer |
 | Longboard | `longboard` | Wide tall ellipse with stringer |
-| Gun | `gun` | Pointed teardrop path — for big-wave days |
+| Gun | `gun` | Pointed teardrop path |
 | SUP | `sup` | Wide ellipse + paddle line |
 | Foil | `foil` | Short ellipse + mast + wings |
 | N/A | `null` | No icon |
 
-**Decision:** Gun added between Longboard and SUP. Description: *"For big-wave days — paddles fast and holds in steep, powerful surf."* Stored as `"gun"` in `profiles.preferred_board`.
+**Decision:** All cards show only the label (20pt Georgia bold). Earlier per-board descriptions were dropped — the screen heading already establishes we're asking *about the user's board*, so per-card copy read like recommendations and added noise. Only N/A keeps a one-line subtitle ("*No preference — won't show on your profile*") because that option's behavior is non-obvious.
 
-Card style: unselected `rgba(42,26,8,0.35)` bg / `rgba(197,168,130,0.4)` border / `#C5A882` label. Selected `#0F4E63` bg / `#3CC4C4` border / `#3CC4C4` label. Radio button right-aligned.
+Card style: unselected `rgba(42,26,8,0.35)` bg / `rgba(197,168,130,0.4)` border / `#C5A882` label. Selected `#0F4E63` bg / `#3CC4C4` border / `#3CC4C4` label. Icon size 28×53. Radio button right-aligned.
+
+`BoardIcon` accepts optional `width` / `height` props and is exported so it can be reused at smaller sizes elsewhere (e.g. on the profile surfer meta row).
 
 Saves `preferred_board` to `profiles`. Routes to `/onboarding/homebreak`.
 
@@ -255,14 +263,91 @@ Flat rows (no card chrome), separated by `borderBottomWidth: 0.5` lines.
 
 ## Profile Page (`app/(tabs)/profile.tsx`)
 
-- **Top bar:** Lineups wordmark center
-- **Username:** centered above stats row, Georgia bold 26px, cream, no @ symbol
-- **Avatar:** 83×83px circle, offset right and upward
-- **Display name:** Georgia regular (not bold) below avatar
-- **Stats row:** SURFS / BREAKS / REGIONS — 22px Georgia bold cream values, 11px teal labels
-- **Follow row:** followers/following left, "Member since Mon YYYY" right-aligned (14px teal)
-- **Tabs:** Breaks / Wishlist — same sliding indicator as breaks page
-- Break rows match breaks page style exactly
+`ProfileScreen` powers two routes:
+- `(tabs)/profile` — own profile (read from `auth.getSession()`)
+- `/user-profile?userId=…` — another user's profile (re-exports the same component; the Profile *tab* never gets hijacked by another user's `userId` param)
+
+### Top bar
+- Back chevron (other-user view only) | Lineups wordmark center | Settings gear (own view only)
+
+### Profile card (`#0F2838` bg)
+- **Username:** centered above the avatar/stats row (Georgia bold, no @ symbol)
+- **Left column:** 83 × 83 avatar circle (initial centered) + display name below
+- **Right column:**
+  - Stats row — **SESSIONS / BREAKS / COUNTRIES** (25pt Georgia bold cream values, 13pt muted-teal labels). `SESSIONS` counts the user's logged sessions; `BREAKS` and `COUNTRIES` derive from `break_ratings` rows so the numbers match what the Breaks tab shows.
+  - **SpinningGlobe** — auto-rotating ~60 px globe centered beneath the stat numbers. Decorative (no user data), tappable → navigates to `/surfed-globe`.
+- **Bio + surfer meta row** — between bio text and the follower counts. Three small icon + label items separated by `·`:
+  - `BoardIcon` + preferred board (Shortboard / Mid-Length / …)
+  - `footsteps-outline` + Regular / Goofy
+  - `location-outline` + home break name
+  - Each item omitted entirely if its field is null; home break uses `flexShrink:1` + `numberOfLines={1}` so long names ellipsize cleanly.
+- **Follower row** — `<n> followers` / `<n> following` are tappable, push to `/follows-list?userId=…&type=followers|following`. "Member since Mon YYYY" right-aligned.
+- **Action button** — own profile shows full-width *Edit Profile* (placeholder). Other-user view shows side-by-side Follow / Message.
+
+### Tabs
+**Breaks · Sessions · Wishlist** with the same sliding underline indicator as the Breaks tab.
+- **Breaks** — region-grouped list. Groups by `admin1` (state/province) when populated, falling back to `country` with a small alias map (`United States of America` → `USA`, etc.). Each row: rank, break name, region subtitle, type + direction pills, optional avg-session-rating chip, dot rating, optional `🏄 Favorite` pill.
+- **Sessions** — flat list of logged sessions grouped by month (`MAY 2026 · 4`). Each row: date · break name · swell · duration · `X/10` rating in teal. Tap → break detail.
+- **Wishlist** — same row treatment as Breaks but without ratings.
+
+### Sign-out
+- Sticky footer outside the `ScrollView` (own profile only). The ScrollView is `flex:1` and the footer renders as a sibling so it remains anchored at the bottom of the available area regardless of scroll position.
+
+### Other-user navigation
+- Tapping a session author on the feed and rows on `follows-list` push to `/user-profile` (not the Profile tab) so the Profile tab params never get rewritten.
+
+---
+
+## Travels Globe
+
+The interactive globe that shows the regions a user has surfed in. Reached by tapping the spinning globe on the profile card.
+
+### Two components
+
+**`components/SpinningGlobe.tsx`** — decorative, 60 px, auto-rotates at ~14°/sec via `setInterval` (~12 fps). Renders only `admin0` country outlines in muted teal (`#1B5A65`) — same view for every user, no per-user data. Lives in the profile card's right column.
+
+**`components/ProfileGlobe.tsx`** — full-screen interactive view at `/surfed-globe`. Drag-to-rotate (pan gesture) + pinch-to-zoom built with `react-native-gesture-handler` + `react-native-reanimated` worklets. Gesture-start snapshots use `useSharedValue` (not refs) because Reanimated worklets serialize captured objects; refs trigger `[Worklets] Tried to modify key 'current'` warnings and undefined behavior.
+
+### Data pipeline
+
+Highlighted regions are derived per-user from `sessions → breaks → (country, admin1)`:
+
+1. **Schema:** `breaks` table has nullable `country TEXT` and `admin1 TEXT` columns (Natural Earth admin1 `name` and `admin` respectively, e.g. `California` / `United States of America`).
+2. **Backfill:** `scripts/backfill-break-geography.js` runs once locally with a service-role key. For each break, point-in-polygon test against the vendored admin1 GeoJSON; falls back to admin0, then to nearest-centroid within 1000 km for offshore reef breaks (Pipeline at lat/lng 1 km off Oahu wouldn't match `geoContains` on the simplified coastline).
+3. **Read path:** Profile screen and `/surfed-globe` derive `surfedAdmin1s` / `surfedCountries` from the user's sessions and pass them to `ProfileGlobe` as props.
+
+### Vendored topology files
+
+| File | Contents | Use |
+|---|---|---|
+| `assets/world/admin0.json` | TopoJSON, ~250 country outlines, 10% retention, ~900 KB | Idle base for unsurfed countries |
+| `assets/world/admin1.json` | TopoJSON, ~4,600 state/province outlines, 12% retention, ~12 MB | Idle base for surfed countries (so state borders appear where the user has been) + the highlight layer (surfed states in aqua) |
+| `assets/world/continents.json` | TopoJSON, ~7 features dissolved by `CONTINENT`, 15% retention, ~tiny | Base layer during pan/pinch — minimal feature count means the JS thread can re-project every frame without bridge backpressure |
+| `assets/world/*.geojson.bak` | Original full-resolution Natural Earth GeoJSON | Source for re-running the simplifier; not bundled |
+
+All three files come from `nvkelso/natural-earth-vector` and are processed by `scripts/simplify-world.sh` via `mapshaper` CLI (Visvalingam-weighted simplification + TopoJSON conversion + 1e4 quantization). Re-run the script if Natural Earth data updates or different simplification tradeoffs are desired.
+
+### Render-time perf strategy
+
+| State | Base layer | Features rendered |
+|---|---|---|
+| Idle | admin0 for unsurfed countries + admin1 for surfed countries (skipping highlighted states) | ~300 |
+| Gesture active | Continents only (no country borders) | ~7 |
+
+Other techniques applied:
+- **One `<Path>` per layer** — all features in a layer combined into a single concatenated `d` string. Cuts `react-native-svg` reconciliation cost vs. one Path per feature.
+- **Front-hemisphere cull** — cheap spherical-law-of-cosines check on precomputed centroids skips back-facing features before calling `geoPath`.
+- **Combined state setter + 30 fps throttle** — gesture frames update `{lambda, phi, scaleValue}` as one object via a single `runOnJS(commitView)`, gated by a `lastUpdateMs` sharedValue.
+- **Graticule (10° lat/lng grid)** stays visible during drag — single geometry, one `geoPath` call regardless of line count.
+
+### Routes
+- `/surfed-globe?userId=…` — full-screen interactive globe. Re-queries the user's sessions on mount so it works for self and other-user views identically.
+
+### Setup notes
+
+The root `_layout.tsx` wraps the Stack in `<GestureHandlerRootView style={{ flex: 1 }}>`. Without it `GestureDetector` throws *"must be used as a descendant of GestureHandlerRootView"*. The `flex: 1` is non-negotiable — without it the whole UI collapses.
+
+`react-native-worklets` is a peer dependency of `react-native-reanimated@4` and must be installed explicitly (`npx expo install react-native-worklets`). Without it the bundler errors at `Unable to resolve "react-native-worklets" from "node_modules/react-native-reanimated/src/initializers.ts"`.
 
 ---
 
@@ -302,26 +387,63 @@ FAB (bottom right) enters pin drop mode. Tap map to place pin. Form sheet collec
 ## Database
 
 ### Tables
-- `profiles` — `username`, `display_name`, `bio`, `email`, `experience_level`, `stance`, `preferred_board`, `home_break`, `created_at`
-- `breaks` — `id`, `name`, `lat`, `lng`, `type`, `direction`, `region`, `is_custom`, `created_by`
-- `sessions` — `user_id`, `break_id`, `date`, `rating`, `swell_size`, `wind`, `crowd_factor`, `board`, `surfed_with`, `notes`, `is_public`
+- `profiles` — `username`, `display_name`, `bio`, `email`, `avatar_url`, `home_break`, `home_break_id`, `experience_level`, `experience` (legacy, unused), `stance`, `preferred_board`, `created_at`
+- `breaks` — `id`, `name`, `lat`, `lng`, `type`, `direction`, `region`, `country`, `admin1`, `is_custom`, `created_by`
+- `sessions` — `user_id`, `break_id`, `date`, `rating`, `swell_size`, `wind`, `crowd_factor`, `board`, `duration_minutes`, `surfed_with`, `tagged_user_ids`, `notes`, `is_public`
 - `session_photos` — `session_id`, `user_id`, `url`, `storage_path`
-- `break_ratings` — `user_id`, `break_id`, `rating`, `is_favorite`
+- `break_ratings` — `user_id`, `break_id`, `rating`, `approx_sessions`, `is_favorite`
 - `follows` — `follower_id`, `following_id`
 - `wishlist` — `user_id`, `break_id`
 
-### Migrations Required
-```sql
--- Add region to breaks
-scripts/add-region-column.sql
+### Column Notes
+- `profiles.experience` is a legacy column kept for back-compat; current onboarding writes `experience_level`. Safe to drop on next schema cleanup.
+- `breaks.country` / `breaks.admin1` are populated by `scripts/backfill-break-geography.js` from the vendored Natural Earth GeoJSON (see Travels Globe section). Country uses the Natural Earth `NAME` / `admin` long form (e.g. `United States of America`). UI applies a small alias map for display.
+- `breaks.region` predates the country/admin1 columns and is left in place; the app now reads `admin1`/`country` for region groupings.
 
--- Add email to profiles
+### Migrations Applied / Required
+```sql
+-- Profile onboarding columns (added during this work)
+ALTER TABLE profiles ADD COLUMN preferred_board TEXT;
+ALTER TABLE profiles ADD CONSTRAINT profiles_preferred_board_check
+  CHECK (preferred_board IS NULL OR preferred_board IN
+    ('shortboard','mid-length','longboard','gun','sup','foil'));
+ALTER TABLE profiles ADD COLUMN home_break TEXT;
+ALTER TABLE profiles ADD COLUMN experience_level TEXT;
+ALTER TABLE profiles ADD CONSTRAINT profiles_experience_level_check
+  CHECK (experience_level IS NULL OR experience_level IN
+    ('beginner','intermediate','advanced','expert'));
+
+-- Travels Globe columns on breaks
+ALTER TABLE breaks ADD COLUMN country TEXT;
+ALTER TABLE breaks ADD COLUMN admin1 TEXT;
+
+-- Earlier scripted migrations (still required)
+scripts/add-region-column.sql
 scripts/add-email-to-profiles.sql
 
--- Add crowd_factor to sessions
 ALTER TABLE sessions ADD COLUMN IF NOT EXISTS
-crowd_factor text CHECK (crowd_factor IN ('empty','moderate','crowded','zoo'));
+  crowd_factor text CHECK (crowd_factor IN ('empty','moderate','crowded','zoo'));
 ```
+
+### Row-Level Security
+
+Existing policies on `break_ratings` and `wishlist` were ownership-only (`auth.uid() = user_id`), which meant other users' rated/wished breaks appeared as zero counts on their public profiles. Added permissive SELECT policies so social profile views work:
+
+```sql
+CREATE POLICY "break_ratings_select_all"
+  ON break_ratings FOR SELECT USING (true);
+
+CREATE POLICY "wishlist_select_all"
+  ON wishlist FOR SELECT USING (true);
+```
+
+Writes remain owner-only via the pre-existing `ALL` policies (Postgres OR-combines SELECT policies, so the permissive SELECT here doesn't unlock writes).
+
+`profiles` has two redundant `SELECT USING (true)` policies (`Profiles are viewable by everyone` + `Authenticated users can read profiles`). Safe to consolidate into one on next cleanup.
+
+### Onboarding Write Hygiene
+
+Every onboarding `.update()` call now destructures `{ error }` from the supabase response and logs failures via `console.error('[onboarding/<screen>] failed to save <field>:', error)`. Previously silent — exposed the original "columns don't exist, data is silently dropped" problem only when we tried to surface the fields on the profile. Don't write to `profiles` without this pattern.
 
 ### Region Bounds (for `add-region-column.sql`)
 | Region | Lat | Lng |
@@ -343,12 +465,19 @@ crowd_factor text CHECK (crowd_factor IN ('empty','moderate','crowded','zoo'));
 
 | Package | Purpose |
 |---|---|
+| `@supabase/supabase-js` | Auth, Postgres queries, RLS |
 | `expo-contacts` | Read device contacts for friends discovery |
 | `expo-image-picker` | Avatar + session photo selection |
-| `react-native-maps` | Map view |
-| `react-native-map-clustering` | Pin clustering on map |
-| `react-native-svg` | Board icons, Lineups wordmark |
+| `expo-camera`, `expo-media-library` | Session photo capture / storage |
+| `expo-router` | File-based navigation |
+| `react-native-maps`, `react-native-map-clustering` | Map view + pin clustering |
+| `react-native-svg` | Board icons, Lineups wordmark, globe rendering |
+| `react-native-gesture-handler` | Pan/pinch on the full globe; required `GestureHandlerRootView` wrap at root layout |
+| `react-native-reanimated` + `react-native-worklets` | Gesture worklets + shared values for the globe; worklets must be installed explicitly with reanimated v4 |
+| `d3-geo` | Orthographic projection, path generation, point-in-polygon (backfill) |
+| `topojson-client` | Unwrap vendored TopoJSON to GeoJSON at module load |
 | `@expo/vector-icons` | Ionicons tab and UI icons |
+| `mapshaper` *(dev / build only, via `npx`)* | One-shot simplification + TopoJSON conversion of the world topology |
 
 ---
 
@@ -364,20 +493,37 @@ app/
     feed.tsx            — social feed (dark theme)
     breaks.tsx          — my breaks list with filter sheet
     map.tsx             — map with pins, callout, rate break modal, pin drop
-    journal.tsx         — session journal
-    profile.tsx         — user profile (dark theme)
+    profile.tsx         — user profile (dark theme); also re-exported by user-profile.tsx
+    search/             — discover surfers & breaks (replaced earlier Journal tab)
   onboarding/
     profile.tsx         — name + username
     stance.tsx          — experience level
     stance-screen.tsx   — regular / goofy / N/A
-    board.tsx           — board type with SVG icons (7 options incl. Gun)
+    board.tsx           — board type with SVG icons (7 options); exports BoardIcon
     homebreak.tsx       — home break search
     contacts.tsx        — contacts permission
     friends.tsx         — find your crew
     history.tsx         — log past sessions
     done.tsx            — completion
+  break-detail.tsx      — per-break detail (rating, sessions, hero meta line)
   log-session.tsx       — 5-step session logging flow (transparent modal)
-  _layout.tsx           — root stack, log-session as transparentModal
+  follows-list.tsx      — followers / following list reached from profile counts
+  user-profile.tsx      — re-exports ProfileScreen so other-user views don't hijack the Profile tab
+  surfed-globe.tsx      — full-screen interactive globe (ProfileGlobe host)
+  _layout.tsx           — root stack wrapped in GestureHandlerRootView; log-session as transparentModal
+
+components/
+  LineupsLogo.tsx       — Lineups wordmark SVG
+  RateBreakModal.tsx    — re-rate flow used on the break detail screen
+  SpinningGlobe.tsx     — decorative auto-rotating globe on the profile card
+  ProfileGlobe.tsx      — interactive globe with pan/pinch on /surfed-globe
+
+assets/
+  world/
+    admin0.json         — TopoJSON, simplified country outlines (10% retention)
+    admin1.json         — TopoJSON, simplified state/province outlines (12% retention)
+    continents.json     — TopoJSON, ~7 dissolved continent polygons (15% retention)
+    *.geojson.bak       — original Natural Earth source (not bundled at runtime)
 
 lib/
   supabase.ts           — Supabase client
@@ -389,9 +535,12 @@ context/
   ThemeContext.tsx      — ThemeProvider + useTheme hook
 
 scripts/
-  seed-breaks.sql
-  add-region-column.sql
+  seed-breaks.sql       — seed data
+  add-region-column.sql — initial breaks.region column + bounds
   add-email-to-profiles.sql
+  backfill-break-geography.js  — one-shot; sets breaks.country / breaks.admin1 via point-in-polygon
+  simplify-world.sh     — runs mapshaper on the .geojson.bak files to (re)produce the vendored TopoJSON
+  check_admin1.js       — diagnostic; counts admin1 features and verifies key region coverage
 ```
 
 ---
@@ -406,3 +555,22 @@ npm run web        # Browser
 ```
 
 No lint or test scripts are configured yet.
+
+### Fresh-clone setup for the Travels Globe
+
+The vendored TopoJSON files in `assets/world/` are committed, so a fresh clone runs without extra setup. The two paths below are only needed if you're regenerating the geometry or backfilling break geography for new data.
+
+**Regenerate the simplified world files** (requires the `.geojson.bak` originals — download from the [`nvkelso/natural-earth-vector`](https://github.com/nvkelso/natural-earth-vector) repo's `geojson/` folder if missing):
+
+```bash
+./scripts/simplify-world.sh
+```
+
+**Backfill `country` / `admin1` on `breaks`** (one-shot; uses the service-role key, treat it as a secret):
+
+```bash
+export SUPABASE_URL="https://YOUR-PROJECT.supabase.co"
+export SUPABASE_SERVICE_ROLE_KEY="<rotated key>"
+node scripts/backfill-break-geography.js
+unset SUPABASE_SERVICE_ROLE_KEY
+```

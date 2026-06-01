@@ -16,6 +16,26 @@ import { Ionicons } from '@expo/vector-icons'
 import Svg, { Text as SvgText, Path } from 'react-native-svg'
 import { supabase } from '../../lib/supabase'
 import { BoardIcon, type BoardValue } from '../onboarding/board'
+import SpinningGlobe from '../../components/SpinningGlobe'
+
+// Display alias for verbose Natural Earth country names.
+const COUNTRY_ALIAS: Record<string, string> = {
+  'United States of America': 'USA',
+  'Russian Federation': 'Russia',
+  'United Kingdom': 'UK',
+  'Republic of Korea': 'South Korea',
+  'Democratic Republic of the Congo': 'DR Congo',
+}
+
+function aliasCountry(name: string): string {
+  return COUNTRY_ALIAS[name] ?? name
+}
+
+function regionLabel(b: { admin1: string | null; country: string | null }): string {
+  if (b.admin1) return b.admin1
+  if (b.country) return aliasCountry(b.country)
+  return 'Unknown'
+}
 
 // ─── Wordmark ─────────────────────────────────────────────────────────────────
 
@@ -47,26 +67,6 @@ function avatarColor(username: string): string {
   return '#0F5A65'
 }
 
-function regionFromLatLng(lat: number, lng: number): string {
-  if (lat >= 32 && lat <= 42 && lng >= -124 && lng <= -114) return 'California, USA'
-  if (lat >= 18 && lat <= 23 && lng >= -161 && lng <= -154) return 'Hawaii, USA'
-  if (lat >= 43 && lat <= 50 && lng >= -127 && lng <= -118) return 'Pacific Northwest'
-  if (lat >= 20 && lat <= 32 && lng >= -120 && lng <= -85)  return 'Mexico'
-  if (lat >= 7  && lat <= 20 && lng >= -92  && lng <= -77)  return 'Central America'
-  if (lat >= -35 && lat <= 5 && lng >= -74 && lng <= -30)   return 'Brazil'
-  if (lat >= -56 && lat <= -5 && lng >= -82 && lng <= -65)  return 'South America'
-  if (lat >= 43 && lat <= 47 && lng >= -5  && lng <= 3)     return 'Basque Country, Spain'
-  if (lat >= 36 && lat <= 44 && lng >= -10 && lng <= -6)    return 'Portugal'
-  if (lat >= 49 && lat <= 60 && lng >= -12 && lng <= 2)     return 'UK & Ireland'
-  if (lat >= 27 && lat <= 36 && lng >= -14 && lng <= 0)     return 'Morocco'
-  if (lat >= 36 && lat <= 47 && lng >= 0   && lng <= 18)    return 'Mediterranean'
-  if (lat >= -11 && lat <= -5 && lng >= 105 && lng <= 125)  return 'Indonesia'
-  if (lat >= -44 && lat <= -10 && lng >= 113 && lng <= 155) return 'Australia'
-  if (lat >= 10  && lat <= 30 && lng >= 120 && lng <= 145)  return 'Philippines'
-  if (lat >= 0 && lat <= 90  && lng >= -180 && lng <= -100) return 'North Pacific'
-  if (lat >= 0 && lat <= 90  && lng >= -100 && lng <= 0)    return 'North Atlantic'
-  return 'Other'
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -109,6 +109,8 @@ interface RatedBreak {
     lng: number
     type: string | null
     direction: string | null
+    country: string | null
+    admin1: string | null
   } | null
   sessionCount: number
   avgSessionRating: number | null
@@ -122,6 +124,8 @@ interface WishlistBreak {
     lng: number
     type: string | null
     direction: string | null
+    country: string | null
+    admin1: string | null
   } | null
 }
 
@@ -136,6 +140,8 @@ interface SessionRow {
     name: string
     lat: number
     lng: number
+    country: string | null
+    admin1: string | null
   } | null
 }
 
@@ -180,7 +186,6 @@ function DotRating({ rating, size = 9 }: { rating: number; size?: number }) {
 function BreakRow({ item, rank }: { item: RatedBreak; rank: number }) {
   const b = item.breaks
   if (!b) return null
-  const region = regionFromLatLng(b.lat, b.lng)
   return (
     <TouchableOpacity
       style={styles.breakRow}
@@ -191,7 +196,7 @@ function BreakRow({ item, rank }: { item: RatedBreak; rank: number }) {
 
       <View style={styles.breakInfo}>
         <Text style={styles.breakName} numberOfLines={1}>{b.name}</Text>
-        <Text style={styles.breakRegion}>{region}</Text>
+        <Text style={styles.breakRegion}>{regionLabel(b)}</Text>
         <View style={styles.breakPills}>
           {b.type && <Pill label={b.type} bg="rgba(83,74,183,0.2)" color="#9B95E8" />}
           {b.direction && <Pill label={b.direction} bg="rgba(15,110,86,0.2)" color="#3CC4C4" />}
@@ -233,7 +238,7 @@ function BreaksTab({ ratings }: { ratings: RatedBreak[] }) {
     const map = new Map<string, RatedBreak[]>()
     for (const r of ratings) {
       if (!r.breaks) continue
-      const region = regionFromLatLng(r.breaks.lat, r.breaks.lng)
+      const region = regionLabel(r.breaks)
       const list = map.get(region) ?? []
       list.push(r)
       map.set(region, list)
@@ -289,7 +294,7 @@ function WishlistTab({ items }: { items: WishlistBreak[] }) {
             <Text style={[styles.breakRank]}>{idx + 1}</Text>
             <View style={styles.breakInfo}>
               <Text style={styles.breakName}>{b.name}</Text>
-              <Text style={styles.breakRegion}>{regionFromLatLng(b.lat, b.lng)}</Text>
+              <Text style={styles.breakRegion}>{regionLabel(b)}</Text>
               <View style={styles.breakPills}>
                 {b.type && <Pill label={b.type} bg="rgba(83,74,183,0.2)" color="#9B95E8" />}
                 {b.direction && <Pill label={b.direction} bg="rgba(15,110,86,0.2)" color="#3CC4C4" />}
@@ -435,6 +440,24 @@ export default function ProfileScreen() {
 
   useEffect(() => { resolveAndFetch() }, [params.userId])
 
+  // Distinct admin1 + country sets derived from logged sessions —
+  // drives the ProfileGlobe highlight coloring.
+  const surfedAdmin1s = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of userSessions) {
+      if (s.breaks?.admin1) set.add(s.breaks.admin1)
+    }
+    return [...set]
+  }, [userSessions])
+
+  const surfedCountries = useMemo(() => {
+    const set = new Set<string>()
+    for (const s of userSessions) {
+      if (s.breaks?.country) set.add(s.breaks.country)
+    }
+    return [...set]
+  }, [userSessions])
+
   async function resolveAndFetch() {
     setLoading(true)
     const { data: { session } } = await supabase.auth.getSession()
@@ -463,9 +486,9 @@ export default function ProfileScreen() {
       ] = await Promise.all([
         supabase.from('profiles').select('username, display_name, bio, created_at').eq('id', targetId).single(),
         supabase.from('profiles').select('stance, preferred_board, home_break').eq('id', targetId).maybeSingle(),
-        supabase.from('sessions').select('id, date, rating, swell_size, duration_minutes, break_id, breaks(name, lat, lng)').eq('user_id', targetId).order('date', { ascending: false }),
-        supabase.from('break_ratings').select('break_id, rating, approx_sessions, is_favorite, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
-        supabase.from('wishlist').select('break_id, breaks(name, lat, lng, type, direction)').eq('user_id', targetId),
+        supabase.from('sessions').select('id, date, rating, swell_size, duration_minutes, break_id, breaks(name, lat, lng, country, admin1)').eq('user_id', targetId).order('date', { ascending: false }),
+        supabase.from('break_ratings').select('break_id, rating, approx_sessions, is_favorite, breaks(name, lat, lng, type, direction, country, admin1)').eq('user_id', targetId),
+        supabase.from('wishlist').select('break_id, breaks(name, lat, lng, type, direction, country, admin1)').eq('user_id', targetId),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', targetId),
         supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', targetId),
       ])
@@ -511,8 +534,8 @@ export default function ProfileScreen() {
         }
       })
 
-      const regions = new Set(ratedRows.map(r => r.breaks ? regionFromLatLng(r.breaks.lat, r.breaks.lng) : null).filter(Boolean))
-      setCountryCount(regions.size || Math.ceil(distinctBreaks.size / 3) || 0)
+      const countries = new Set(ratedRows.map(r => r.breaks?.country).filter(Boolean) as string[])
+      setCountryCount(countries.size)
       setRatings(ratedRows)
       setWishlist((wishlistData ?? []) as unknown as WishlistBreak[])
       setFollowerCount(followerCnt ?? 0)
@@ -608,17 +631,33 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.displayName} numberOfLines={2}>{displayName}</Text>
               </View>
-              <View style={styles.statsRow}>
-                {([
-                  { value: surfCount,    label: 'SESSIONS' },
-                  { value: breakCount,   label: 'BREAKS' },
-                  { value: countryCount, label: 'REGIONS' },
-                ] as const).map(({ value, label }) => (
-                  <View key={label} style={styles.statBlock}>
-                    <Text style={styles.statValue}>{value}</Text>
-                    <Text style={styles.statLabel}>{label}</Text>
-                  </View>
-                ))}
+              <View style={styles.statsColumn}>
+                <View style={styles.statsBlocksRow}>
+                  {([
+                    { value: surfCount,    label: 'SESSIONS' },
+                    { value: breakCount,   label: 'BREAKS' },
+                    { value: countryCount, label: 'COUNTRIES' },
+                  ] as const).map(({ value, label }) => (
+                    <View key={label} style={styles.statBlock}>
+                      <Text style={styles.statValue}>{value}</Text>
+                      <Text style={styles.statLabel}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={styles.statsGlobeWrap}
+                  activeOpacity={0.75}
+                  hitSlop={10}
+                  onPress={() =>
+                    viewedUserId &&
+                    router.push({
+                      pathname: '/surfed-globe',
+                      params: { userId: viewedUserId },
+                    })
+                  }
+                >
+                  <SpinningGlobe size={60} />
+                </TouchableOpacity>
               </View>
             </View>
 
@@ -758,6 +797,7 @@ export default function ProfileScreen() {
             )}
           </View>
 
+
           {/* ── Tab strip with sliding indicator ── */}
           <View
             style={styles.tabStrip}
@@ -850,6 +890,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(74,122,135,0.3)',
   },
 
+
   // Avatar + stats
   avatarStatsRow: {
     flexDirection: 'row',
@@ -878,9 +919,17 @@ const styles = StyleSheet.create({
     fontSize: 29,
     color: '#E8D5B8',
   },
-  statsRow: {
+  statsColumn: {
     flex: 1,
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+  },
+  statsBlocksRow: {
     flexDirection: 'row',
+  },
+  statsGlobeWrap: {
+    alignItems: 'center',
+    marginTop: 12,
   },
   statBlock: {
     flex: 1,
