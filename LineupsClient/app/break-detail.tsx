@@ -3,12 +3,15 @@ import {
   ActivityIndicator,
   Dimensions,
   Image,
+  Modal,
   Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  useWindowDimensions,
   View,
 } from 'react-native'
 import MapView, { Marker } from 'react-native-maps'
@@ -258,7 +261,7 @@ function formatDuration(mins: number | null): string | null {
   return m === 0 ? `${h}h` : `${h}h ${m}m`
 }
 
-function SessionCard({ session }: { session: Session }) {
+function SessionCard({ session, onPress }: { session: Session; onPress: (s: Session) => void }) {
   const stats: { label: string; value: string; sub?: string }[] = []
   if (session.swell_size) {
     stats.push({
@@ -274,7 +277,11 @@ function SessionCard({ session }: { session: Session }) {
   if (duration) stats.push({ label: 'TIME', value: duration })
 
   return (
-    <View style={[styles.sessionCard, !session.is_public && session.isOwn && styles.sessionCardPrivate]}>
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() => onPress(session)}
+      style={[styles.sessionCard, !session.is_public && session.isOwn && styles.sessionCardPrivate]}
+    >
       {/* Header: Date + Privacy */}
       <View style={styles.sessionTop}>
         <Text style={styles.sessionDate}>{formatDate(session.date)}</Text>
@@ -367,7 +374,7 @@ function SessionCard({ session }: { session: Session }) {
           ))}
         </ScrollView>
       )}
-    </View>
+    </TouchableOpacity>
   )
 }
 
@@ -375,7 +382,7 @@ function SessionCard({ session }: { session: Session }) {
 
 export default function BreakDetailScreen() {
   const insets = useSafeAreaInsets()
-  const { id, name } = useLocalSearchParams<{ id: string; name: string }>()
+  const { id, name, view } = useLocalSearchParams<{ id: string; name: string; view?: string }>()
 
   const [loading, setLoading]         = useState(true)
   const [details, setDetails]         = useState<BreakDetails | null>(null)
@@ -389,7 +396,10 @@ export default function BreakDetailScreen() {
   const [showRateModal, setShowRateModal] = useState(false)
 
   // Sessions list expansion
-  const [showAllSessions, setShowAllSessions] = useState(false)
+  const [showAllSessions, setShowAllSessions] = useState(view === 'sessions')
+
+  // Active expanded session (drives the detail bottom sheet)
+  const [activeSession, setActiveSession] = useState<Session | null>(null)
 
   useEffect(() => {
     if (id) fetchAll(id)
@@ -756,7 +766,7 @@ export default function BreakDetailScreen() {
             showsVerticalScrollIndicator={false}
             contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}
           >
-            {sessions.map(s => <SessionCard key={s.id} session={s} />)}
+            {sessions.map(s => <SessionCard key={s.id} session={s} onPress={setActiveSession} />)}
           </ScrollView>
         </>
       ) : (
@@ -823,7 +833,7 @@ export default function BreakDetailScreen() {
             </>
           ) : (
             <>
-              <SessionCard session={sessions[0]} />
+              <SessionCard session={sessions[0]} onPress={setActiveSession} />
               {sessions.length > 1 && (
                 <TouchableOpacity
                   style={styles.viewAllBtn}
@@ -860,9 +870,394 @@ export default function BreakDetailScreen() {
           setShowRateModal(false)
         }}
       />
+
+      <SessionDetailSheet
+        session={activeSession}
+        onClose={() => setActiveSession(null)}
+      />
     </View>
   )
 }
+
+// ─── Session detail sheet ─────────────────────────────────────────────────────
+
+function SessionDetailSheet({
+  session,
+  onClose,
+}: {
+  session: Session | null
+  onClose: () => void
+}) {
+  const insets = useSafeAreaInsets()
+  const { height: screenHeight } = useWindowDimensions()
+  const visible = session != null
+
+  if (!session) {
+    return (
+      <Modal visible={false} transparent animationType="slide" onRequestClose={onClose} />
+    )
+  }
+
+  const sheetHeight = Math.round(screenHeight * 0.88)
+  const isOwn = session.isOwn
+
+  const stats: { label: string; value: string; sub?: string }[] = []
+  if (session.swell_size) {
+    stats.push({
+      label: 'SWELL',
+      value: session.swell_size,
+      sub: SWELL_TO_RELATIVE[session.swell_size],
+    })
+  }
+  if (session.wind)         stats.push({ label: 'WIND',  value: session.wind })
+  if (session.crowd_factor) stats.push({ label: 'CROWD', value: formatCrowd(session.crowd_factor) ?? '' })
+  if (session.board)        stats.push({ label: 'BOARD', value: session.board })
+  const duration = formatDuration(session.duration_minutes)
+  if (duration) stats.push({ label: 'TIME', value: duration })
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <TouchableWithoutFeedback onPress={onClose}>
+        <View style={sheetStyles.backdrop}>
+          <TouchableWithoutFeedback>
+            <View style={[sheetStyles.sheet, { height: sheetHeight, paddingBottom: insets.bottom + 12 }]}>
+              <View style={sheetStyles.handle} />
+
+              {/* Header strip */}
+              <View style={sheetStyles.headerRow}>
+                <TouchableOpacity onPress={onClose} hitSlop={8} style={sheetStyles.closeBtn}>
+                  <Ionicons name="close" size={22} color="#E8D5B8" />
+                </TouchableOpacity>
+                <Text style={sheetStyles.headerDate} numberOfLines={1}>
+                  {formatDate(session.date)}
+                </Text>
+                {isOwn ? (
+                  <View style={[
+                    sheetStyles.privacyBadge,
+                    session.is_public ? sheetStyles.privacyPublic : sheetStyles.privacyPrivate,
+                  ]}>
+                    <Text style={[
+                      sheetStyles.privacyText,
+                      session.is_public ? sheetStyles.privacyPublicText : sheetStyles.privacyPrivateText,
+                    ]}>
+                      {session.is_public ? '● Public' : '◆ Private'}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={sheetStyles.privacyPlaceholder} />
+                )}
+              </View>
+
+              <ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={sheetStyles.scrollContent}
+              >
+                {/* Session rating */}
+                {session.rating != null && session.rating > 0 && (
+                  <View style={sheetStyles.ratingBlock}>
+                    <Text style={sheetStyles.sectionLabel}>SESSION RATING</Text>
+                    <View style={sheetStyles.ratingRow}>
+                      <Text style={sheetStyles.ratingValue}>{session.rating}</Text>
+                      <Text style={sheetStyles.ratingMax}>/10</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Stats grid */}
+                {stats.length > 0 && (
+                  <View style={sheetStyles.statsGrid}>
+                    {stats.map((s, i) => (
+                      <View key={i} style={sheetStyles.statTile}>
+                        <Text style={sheetStyles.statLabel}>{s.label}</Text>
+                        <Text style={sheetStyles.statValue} numberOfLines={2}>{s.value}</Text>
+                        {s.sub && (
+                          <Text style={sheetStyles.statSub} numberOfLines={1}>{s.sub}</Text>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Surfed with */}
+                {session.taggedUsers.length > 0 && (
+                  <View style={sheetStyles.section}>
+                    <Text style={sheetStyles.sectionLabel}>SURFED WITH</Text>
+                    <View style={sheetStyles.taggedList}>
+                      {session.taggedUsers.map(u => (
+                        <TouchableOpacity
+                          key={u.id}
+                          style={sheetStyles.taggedItem}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            onClose()
+                            router.push({ pathname: '/user-profile', params: { userId: u.id } })
+                          }}
+                        >
+                          {u.avatarUrl ? (
+                            <Image source={{ uri: u.avatarUrl }} style={sheetStyles.taggedAvatar} />
+                          ) : (
+                            <View style={[sheetStyles.taggedAvatar, sheetStyles.taggedAvatarFallback]}>
+                              <Text style={sheetStyles.taggedAvatarLetter}>
+                                {u.displayName.charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          <Text style={sheetStyles.taggedName} numberOfLines={1}>
+                            {u.displayName}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {/* Notes — primary section */}
+                <View style={sheetStyles.section}>
+                  <Text style={sheetStyles.sectionLabel}>NOTES</Text>
+                  {session.notes?.trim() ? (
+                    <Text style={sheetStyles.notesText}>{session.notes.trim()}</Text>
+                  ) : (
+                    <Text style={sheetStyles.emptyText}>No notes from this session</Text>
+                  )}
+                </View>
+
+                {/* Photos */}
+                <View style={sheetStyles.section}>
+                  <Text style={sheetStyles.sectionLabel}>
+                    {session.photos.length === 0
+                      ? 'PHOTOS'
+                      : session.photos.length === 1 ? 'PHOTO' : `PHOTOS · ${session.photos.length}`}
+                  </Text>
+                  {session.photos.length > 0 ? (
+                    <View style={sheetStyles.photoList}>
+                      {session.photos.map((p, i) => (
+                        <Image
+                          key={i}
+                          source={{ uri: p.url }}
+                          style={sheetStyles.photo}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </View>
+                  ) : (
+                    <Text style={sheetStyles.emptyText}>No pictures from this session</Text>
+                  )}
+                </View>
+              </ScrollView>
+            </View>
+          </TouchableWithoutFeedback>
+        </View>
+      </TouchableWithoutFeedback>
+    </Modal>
+  )
+}
+
+const sheetStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'flex-end',
+  },
+  sheet: {
+    backgroundColor: '#0B2230',
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    borderTopWidth: 0.5,
+    borderTopColor: 'rgba(74,122,135,0.35)',
+    paddingTop: 8,
+  },
+  handle: {
+    alignSelf: 'center',
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(74,122,135,0.5)',
+    marginBottom: 8,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 0.5,
+    borderBottomColor: 'rgba(74,122,135,0.2)',
+    gap: 10,
+  },
+  closeBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerDate: {
+    flex: 1,
+    fontFamily: 'Georgia',
+    fontStyle: 'italic',
+    fontSize: 15,
+    color: '#E8D5B8',
+  },
+  privacyBadge: {
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+  },
+  privacyPublic: {
+    backgroundColor: 'rgba(60,196,196,0.18)',
+  },
+  privacyPrivate: {
+    backgroundColor: 'rgba(127,119,221,0.18)',
+  },
+  privacyText: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    letterSpacing: 0.4,
+  },
+  privacyPublicText: {
+    color: '#3CC4C4',
+  },
+  privacyPrivateText: {
+    color: '#9B95E8',
+  },
+  privacyPlaceholder: {
+    width: 36,
+  },
+
+  scrollContent: {
+    paddingBottom: 28,
+  },
+
+  section: {
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  sectionLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    color: '#4A7A87',
+    letterSpacing: 1.5,
+    marginBottom: 10,
+  },
+
+  // Rating
+  ratingBlock: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+  },
+  ratingRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+  },
+  ratingValue: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontSize: 52,
+    color: '#3CC4C4',
+    lineHeight: 56,
+  },
+  ratingMax: {
+    fontFamily: 'Georgia',
+    fontSize: 22,
+    color: '#4A7A87',
+    marginLeft: 4,
+    marginBottom: 8,
+  },
+
+  // Stats grid
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    paddingTop: 10,
+  },
+  statTile: {
+    width: '50%',
+    paddingHorizontal: 6,
+    paddingVertical: 10,
+  },
+  statLabel: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 10,
+    color: '#4A7A87',
+    letterSpacing: 1.4,
+    marginBottom: 4,
+  },
+  statValue: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontSize: 16,
+    color: '#E8D5B8',
+  },
+  statSub: {
+    fontFamily: 'Helvetica Neue',
+    fontStyle: 'italic',
+    fontSize: 12,
+    color: '#4A7A87',
+    marginTop: 2,
+  },
+
+  // Tagged users
+  taggedList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  taggedItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: '#0F2838',
+    borderRadius: 18,
+  },
+  taggedAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  taggedAvatarFallback: {
+    backgroundColor: '#1B7A87',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  taggedAvatarLetter: {
+    fontFamily: 'Georgia',
+    fontWeight: '700',
+    fontSize: 12,
+    color: '#E8D5B8',
+  },
+  taggedName: {
+    fontFamily: 'Helvetica Neue',
+    fontSize: 13,
+    color: '#E8D5B8',
+  },
+
+  // Notes
+  notesText: {
+    fontFamily: 'Georgia',
+    fontStyle: 'italic',
+    fontSize: 16,
+    color: '#E8D5B8',
+    lineHeight: 24,
+  },
+  emptyText: {
+    fontFamily: 'Georgia',
+    fontStyle: 'italic',
+    fontSize: 14,
+    color: '#4A7A87',
+  },
+
+  // Photos
+  photoList: {
+    gap: 12,
+  },
+  photo: {
+    width: '100%',
+    aspectRatio: 4 / 3,
+    borderRadius: 12,
+    backgroundColor: '#0F2838',
+  },
+})
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
 

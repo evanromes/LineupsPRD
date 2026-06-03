@@ -161,13 +161,21 @@ export default function ProfileGlobe({
 
   // Precompute the small set of surfed feature indices once per surfed set
   // change. The highlight path iterates only this subset (typically <10).
+  //
+  // We require the admin1's parent country to also be in surfedCountrySet —
+  // admin1 names like "Western" / "Northern" / "Central" recur across many
+  // countries (Fiji-Western, Ghana-Western, Uganda-Western, …), so matching
+  // on name alone falsely lights up unrelated regions.
   const surfedIndices = useMemo(() => {
     const out: number[] = []
     for (let i = 0; i < ADMIN1_FEATURES.length; i++) {
-      if (surfedAdmin1Set.has(ADMIN1_FEATURES[i].properties.name)) out.push(i)
+      const p = ADMIN1_FEATURES[i].properties
+      if (!surfedCountrySet.has(p.admin)) continue
+      if (!surfedAdmin1Set.has(p.name)) continue
+      out.push(i)
     }
     return out
-  }, [surfedAdmin1Set])
+  }, [surfedAdmin1Set, surfedCountrySet])
 
   // Combined highlighted path — surfed admin1 features as one <Path>.
   // Rendered both during gesture (so highlights move with the globe) and idle.
